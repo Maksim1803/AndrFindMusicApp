@@ -10,4 +10,12 @@
     <color name="gradient_middle">#4D9DFD</color>
     <color name="gradient_top">#AA2FFE</color>
     <color name="bottom_nav_bg">#008FFF</color>
+    <color name="item_background">#CCFFFFFF</color>
+    <color name="search_background">#F0F0F0</color>
+    <color name="search_stroke">#CCCCCC</color>
+
+    <!-- Dark Theme Gradient -->
+    <color name="dark_gradient_top">#001B51</color>
+    <color name="dark_gradient_middle">#002878</color>
+    <color name="dark_gradient_bottom">#0035A0</color>
 </resources>
