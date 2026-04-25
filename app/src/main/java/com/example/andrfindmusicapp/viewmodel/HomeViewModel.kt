@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
+// Класс для управления данными главного экрана и выполнения поисковых запросов
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val preferenceProvider: PreferenceProvider
@@ -27,11 +28,13 @@ class HomeViewModel @Inject constructor(
         loadLastCategoryTracks()
     }
 
+    // Метод для загрузки треков последней выбранной категории
     fun loadLastCategoryTracks() {
         val category = preferenceProvider.getLastCategory()
         fetchTracksByTag(category)
     }
 
+    // Метод для поиска треков по текстовому запросу
     fun searchTracks(query: String) {
         if (query.isBlank()) {
             loadLastCategoryTracks()
@@ -51,6 +54,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    // Метод для получения списка треков по тегу (категории)
     private fun fetchTracksByTag(tag: String) {
         viewModelScope.launch {
             _isLoading.value = true
