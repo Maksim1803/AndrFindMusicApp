@@ -39,8 +39,7 @@ class CategoriesFragment : Fragment() {
             Category(1, getString(R.string.category_metal), "metal"),
             Category(2, getString(R.string.category_pop), "pop"),
             Category(3, getString(R.string.category_electronic), "electronic"),
-            Category(4, getString(R.string.category_classical), "classical"),
-            Category(5, getString(R.string.category_live), "live")
+            Category(4, getString(R.string.category_classical), "classical")
         )
 
         binding.categoriesRecycler.layoutManager = LinearLayoutManager(requireContext())

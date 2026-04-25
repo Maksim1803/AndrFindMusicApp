@@ -87,6 +87,7 @@ class HomeFragment : Fragment() {
         popup.show()
     }
 
+    // Метод для переключения темы приложения (светлая/темная)
     private fun toggleTheme() {
         val currentNightMode = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
         if (currentNightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) {
@@ -96,6 +97,7 @@ class HomeFragment : Fragment() {
         }
     }
 
+    // Метод для переключения языка интерфейса (RU/EN)
     private fun toggleLanguage() {
         val currentLang = resources.configuration.locales[0].language
         val newLang = if (currentLang == "ru") "en" else "ru"
@@ -135,6 +137,7 @@ class HomeFragment : Fragment() {
         binding.mainRecycler.adapter = adapter
     }
 
+    // Метод для добавления или удаления трека из списка избранного
     private fun toggleFavorite(track: Track) {
         val database = AppDatabase.getDatabase(requireContext())
         viewLifecycleOwner.lifecycleScope.launch {
@@ -156,6 +159,7 @@ class HomeFragment : Fragment() {
         }
     }
 
+    // Метод для обновления статуса "избранное" в адаптере
     private fun refreshFavorites() {
         val database = AppDatabase.getDatabase(requireContext())
         viewLifecycleOwner.lifecycleScope.launch {
@@ -166,6 +170,7 @@ class HomeFragment : Fragment() {
         }
     }
 
+    // Метод для настройки поисковой строки
     private fun setupSearchView() {
         binding.searchViewHome.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String?): Boolean {
