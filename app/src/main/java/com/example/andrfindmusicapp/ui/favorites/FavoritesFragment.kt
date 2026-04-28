@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 
 import dagger.hilt.android.AndroidEntryPoint
 
+// Класс для фрагмента, отображающего список избранных треков
 @AndroidEntryPoint
 class FavoritesFragment : Fragment() {
     private var _binding: FragmentFavoritesBinding? = null
@@ -31,6 +32,7 @@ class FavoritesFragment : Fragment() {
     @javax.inject.Inject
     lateinit var trackDao: com.example.andrfindmusicapp.data.local.TrackDao
 
+    // Метод для создания View фрагмента и инициализации binding
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -40,12 +42,14 @@ class FavoritesFragment : Fragment() {
         return binding.root
     }
 
+    // Метод для настройки UI и загрузки данных после создания View
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupRecyclerView()
         observeFavorites()
     }
 
+    // Метод для настройки RecyclerView и его адаптера
     private fun setupRecyclerView() {
         adapter = HomeAdapter(
             onItemClick = { track ->
@@ -61,6 +65,7 @@ class FavoritesFragment : Fragment() {
         binding.favoritesRecycler.adapter = adapter
     }
 
+    // Метод для подписки на обновления списка избранных треков из базы данных
     private fun observeFavorites() {
         viewLifecycleOwner.lifecycleScope.launch {
             trackDao.getAllFavorites().collectLatest { entities ->
@@ -81,10 +86,12 @@ class FavoritesFragment : Fragment() {
         }
     }
 
+    // Метод для удаления трека из избранного
     private fun toggleFavorite(track: Track) {
-        val database = AppDatabase.getDatabase(requireContext())
         viewLifecycleOwner.lifecycleScope.launch {
-            val dao = database.trackDao()
+            val isCurrentlyFav = trackDao.isFavorite(track.id)
+            
+            // Если трека нет в базе или он там без флага избранного, обновляем/вставляем
             val entity = TrackEntity(
                 id = track.id,
                 name = track.name,
@@ -92,16 +99,14 @@ class FavoritesFragment : Fragment() {
                 albumName = track.albumName,
                 imageUrl = track.imageUrl,
                 audioUrl = track.audioUrl,
-                duration = track.duration
+                duration = track.duration,
+                isFavorite = !isCurrentlyFav
             )
-            if (dao.isFavorite(track.id)) {
-                dao.deleteFavorite(entity)
-            } else {
-                dao.insertFavorite(entity)
-            }
+            trackDao.insertTrack(entity)
         }
     }
 
+    // Метод для очистки ресурсов binding
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
