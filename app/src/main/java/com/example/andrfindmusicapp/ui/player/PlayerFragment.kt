@@ -97,26 +97,38 @@ class PlayerFragment : Fragment() {
     // Метод для добавления или удаления трека из списка избранного
     private fun toggleFavorite(track: Track) {
         viewLifecycleOwner.lifecycleScope.launch {
-            val entity = TrackEntity(
-                id = track.id,
-                name = track.name,
-                duration = track.duration,
-                artistName = track.artistName,
-                albumName = track.albumName,
-                imageUrl = track.imageUrl,
-                audioUrl = track.audioUrl
-            )
-            
             val isCurrentlyFav = trackDao.isFavorite(track.id)
-            if (isCurrentlyFav) {
-                trackDao.deleteFavorite(entity)
+            val newFavStatus = !isCurrentlyFav
+            
+            // Проверяем, есть ли трек вообще в базе (любой: в кэше или избранном)
+            // Мы можем использовать тот же isFavorite или отдельный метод. 
+            // Но проще всего попробовать обновить флаг, и если ничего не обновилось - вставить.
+            
+            val updated = trackDao.updateFavoriteStatus(track.id, newFavStatus)
+            
+            // Если трек новый (например, из поиска) и его не было в базе - вставляем
+            // Так как updateFavoriteStatus возвращает Unit, проверим существование вручную
+            if (!trackDao.isFavorite(track.id) && !isCurrentlyFav) {
+                 val entity = TrackEntity(
+                    id = track.id,
+                    name = track.name,
+                    duration = track.duration,
+                    artistName = track.artistName,
+                    albumName = track.albumName,
+                    imageUrl = track.imageUrl,
+                    audioUrl = track.audioUrl,
+                    isFavorite = true,
+                    category = "" 
+                )
+                trackDao.insertTrack(entity)
             } else {
-                trackDao.insertFavorite(entity)
+                trackDao.updateFavoriteStatus(track.id, newFavStatus)
             }
+
             // Обновляем иконку сразу после изменения
             _binding?.let {
                 it.detailsFavorite.setImageResource(
-                    if (!isCurrentlyFav) R.drawable.ic_star else R.drawable.ic_star_border
+                    if (newFavStatus) R.drawable.ic_star else R.drawable.ic_star_border
                 )
             }
         }

@@ -7,6 +7,7 @@ import coil.load
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.MusicItemBinding
 
+// Класс для адаптера списка треков на главном экране
 class HomeAdapter(
     private val onItemClick: (Track) -> Unit,
     private val onFavoriteClick: (Track) -> Unit
@@ -15,23 +16,28 @@ class HomeAdapter(
     private var tracks: List<Track> = emptyList()
     private var favoriteIds: Set<String> = emptySet()
 
+    // Метод для обновления списка треков
     fun updateData(newTracks: List<Track>) {
         tracks = newTracks
         notifyDataSetChanged()
     }
 
+    // Метод для обновления списка идентификаторов избранных треков
     fun updateFavorites(newFavoriteIds: Set<String>) {
         favoriteIds = newFavoriteIds
         notifyDataSetChanged()
     }
 
+    // Класс для хранения ссылок на элементы интерфейса одного элемента списка
     class ViewHolder(val binding: MusicItemBinding) : RecyclerView.ViewHolder(binding.root)
 
+    // Метод для создания ViewHolder
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = MusicItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return ViewHolder(binding)
     }
 
+    // Метод для привязки данных трека к ViewHolder
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val track = tracks[position]
         with(holder.binding) {
@@ -54,5 +60,6 @@ class HomeAdapter(
         }
     }
 
+    // Метод для получения общего количества элементов в списке
     override fun getItemCount() = tracks.size
 }

@@ -135,6 +135,20 @@ class HomeFragment : Fragment() {
             }
         )
         binding.mainRecycler.adapter = adapter
+        
+        // Добавляем слушатель для пагинации
+        binding.mainRecycler.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
+                if (dy > 0) { // Проверяем скролл вниз
+                    val layoutManager = recyclerView.layoutManager as androidx.recyclerview.widget.LinearLayoutManager
+                    val visibleItemCount = layoutManager.childCount
+                    val totalItemCount = layoutManager.itemCount
+                    val pastVisibleItemCount = layoutManager.findFirstVisibleItemPosition()
+                    
+                    viewModel.doPagination(visibleItemCount, totalItemCount, pastVisibleItemCount)
+                }
+            }
+        })
     }
 
     // Метод для добавления или удаления трека из списка избранного
@@ -142,19 +156,26 @@ class HomeFragment : Fragment() {
         val database = AppDatabase.getDatabase(requireContext())
         viewLifecycleOwner.lifecycleScope.launch {
             val dao = database.trackDao()
-            val entity = TrackEntity(
-                id = track.id,
-                name = track.name,
-                duration = track.duration,
-                artistName = track.artistName,
-                albumName = track.albumName,
-                imageUrl = track.imageUrl,
-                audioUrl = track.audioUrl
-            )
-            if (dao.isFavorite(track.id)) {
-                dao.deleteFavorite(entity)
-            } else {
-                dao.insertFavorite(entity)
+            val isCurrentlyFav = dao.isFavorite(track.id)
+            val newFavStatus = !isCurrentlyFav
+
+            // Пробуем обновить статус, если трек уже есть в базе
+            dao.updateFavoriteStatus(track.id, newFavStatus)
+            
+            // Если трека не было (он пришел из поиска и мы его еще не кэшировали) - вставляем
+            if (!dao.isFavorite(track.id) && !isCurrentlyFav) {
+                val entity = TrackEntity(
+                    id = track.id,
+                    name = track.name,
+                    duration = track.duration,
+                    artistName = track.artistName,
+                    albumName = track.albumName,
+                    imageUrl = track.imageUrl,
+                    audioUrl = track.audioUrl,
+                    isFavorite = true,
+                    category = "" 
+                )
+                dao.insertTrack(entity)
             }
         }
     }

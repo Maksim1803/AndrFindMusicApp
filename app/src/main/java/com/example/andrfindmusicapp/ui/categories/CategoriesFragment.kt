@@ -15,6 +15,7 @@ import com.example.andrfindmusicapp.utils.PreferenceProvider
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
+// Класс для фрагмента выбора категорий музыки
 @AndroidEntryPoint
 class CategoriesFragment : Fragment() {
     private var _binding: FragmentCategoriesBinding? = null
@@ -23,6 +24,7 @@ class CategoriesFragment : Fragment() {
     @Inject
     lateinit var preferenceProvider: PreferenceProvider
 
+    // Метод для создания View фрагмента и инициализации binding
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -32,6 +34,7 @@ class CategoriesFragment : Fragment() {
         return binding.root
     }
 
+    // Метод для настройки списка категорий и логики выбора
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
@@ -53,6 +56,7 @@ class CategoriesFragment : Fragment() {
         }
     }
 
+    // Метод для очистки ресурсов binding
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
