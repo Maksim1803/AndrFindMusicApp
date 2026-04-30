@@ -2,10 +2,8 @@ package com.example.andrfindmusicapp
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import androidx.navigation.findNavController
 import androidx.navigation.ui.setupWithNavController
 import com.example.andrfindmusicapp.databinding.ActivityMainBinding
-
 import dagger.hilt.android.AndroidEntryPoint
 
 // Класс для главной активности приложения, управляющей навигацией и общей темой

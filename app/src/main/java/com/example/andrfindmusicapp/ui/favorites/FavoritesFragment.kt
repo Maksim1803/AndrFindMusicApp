@@ -9,16 +9,14 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.example.andrfindmusicapp.R
-import com.example.andrfindmusicapp.data.local.AppDatabase
 import com.example.andrfindmusicapp.data.local.TrackEntity
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.FragmentFavoritesBinding
 import com.example.andrfindmusicapp.ui.home.adapter.HomeAdapter
 import com.example.andrfindmusicapp.ui.player.PlayerViewModel
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-
-import dagger.hilt.android.AndroidEntryPoint
 
 // Класс для фрагмента, отображающего список избранных треков
 @AndroidEntryPoint

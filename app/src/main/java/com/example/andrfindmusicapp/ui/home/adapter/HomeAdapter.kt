@@ -6,6 +6,7 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.MusicItemBinding
+import com.example.andrfindmusicapp.utils.TimeUtils
 
 // Класс для адаптера списка треков на главном экране
 class HomeAdapter(
@@ -44,6 +45,7 @@ class HomeAdapter(
             title.text = track.name
             artist.text = track.artistName
             album.text = track.albumName
+            duration.text = TimeUtils.formatSeconds(track.duration)
             poster.load(track.imageUrl) {
                 crossfade(true)
                 placeholder(android.R.drawable.ic_menu_gallery)

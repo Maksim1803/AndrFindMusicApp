@@ -72,6 +72,18 @@
             app:layout_constraintTop_toBottomOf="@id/artist"
             tools:text="Album Name" />
 
+        <TextView
+            android:id="@+id/duration"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="4dp"
+            android:textSize="12sp"
+            android:textColor="@android:color/darker_gray"
+            app:layout_constraintStart_toEndOf="@id/poster"
+            app:layout_constraintTop_toBottomOf="@id/album"
+            tools:text="3:45" />
+
          <ImageView
             android:id="@+id/favorite_icon"
             android:layout_width="wrap_content"

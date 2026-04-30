@@ -7,28 +7,33 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.SeekBar
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.lifecycle.repeatOnLifecycle
 import coil.load
 import com.example.andrfindmusicapp.R
 import com.example.andrfindmusicapp.data.local.TrackEntity
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.FragmentPlayerBinding
+import com.example.andrfindmusicapp.ui.main.MainViewModel
+import com.example.andrfindmusicapp.ui.player.adapter.SmallPlaylistAdapter
+import com.example.andrfindmusicapp.utils.TimeUtils
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-// Класс для фрагмента плеера, отвечающего за отображение текущего трека и управление воспроизведением
 @AndroidEntryPoint
 class PlayerFragment : Fragment() {
     private var _binding: FragmentPlayerBinding? = null
     private val binding get() = _binding!!
 
-    private var player: ExoPlayer? = null
-    private var currentTrack: Track? = null
+    private val mainViewModel: MainViewModel by activityViewModels()
     private val playerViewModel: PlayerViewModel by activityViewModels()
+    
+    private lateinit var smallPlaylistAdapter: SmallPlaylistAdapter
     
     @javax.inject.Inject
     lateinit var trackDao: com.example.andrfindmusicapp.data.local.TrackDao
@@ -36,17 +41,17 @@ class PlayerFragment : Fragment() {
     private val handler = Handler(Looper.getMainLooper())
     private val updateSeekBarTask = object : Runnable {
         override fun run() {
-            // Проверяем, существует ли еще binding, чтобы избежать вылета
             _binding?.let { b ->
-                player?.let { p ->
-                    b.seekBar.progress = p.currentPosition.toInt()
+                mainViewModel.getController()?.let { p ->
+                    val currentPos = p.currentPosition
+                    b.seekBar.progress = currentPos.toInt()
+                    b.tvCurrentTime.text = TimeUtils.formatTime(currentPos)
                     handler.postDelayed(this, 1000)
                 }
             }
         }
     }
 
-    // Метод для создания View фрагмента и инициализации binding
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -56,33 +61,163 @@ class PlayerFragment : Fragment() {
         return binding.root
     }
 
-    // Метод для настройки логики фрагмента после создания View
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // Сначала пытаемся получить трек из аргументов (если пришли со списка)
+        setupRecyclerView()
+        setupObservers()
+
+        // Если пришли с конкретным треком (например, из поиска)
         val trackFromArgs = arguments?.getSerializable("track") as? Track
-        
-        if (trackFromArgs != null) {
-            currentTrack = trackFromArgs
-            setupUI(currentTrack!!)
-            checkIsFavorite(currentTrack!!.id)
-            setupPlayer(currentTrack!!.audioUrl)
-        } else {
-            // Если пришли через нижнее меню, берем последний трек из ViewModel
-            playerViewModel.selectedTrack.observe(viewLifecycleOwner) { track ->
-                track?.let {
-                    currentTrack = it
-                    setupUI(it)
-                    checkIsFavorite(it.id)
-                    // Важно: здесь мы НЕ вызываем setupPlayer автоматически, 
-                    // чтобы музыка не начинала играть сама при возврате на экран
+        trackFromArgs?.let {
+            mainViewModel.playTrack(it)
+        }
+
+        setupListeners()
+    }
+
+    private fun setupObservers() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Слушаем текущий трек
+                launch {
+                    mainViewModel.currentTrack.collectLatest { track ->
+                        track?.let {
+                            updateUI(it)
+                            smallPlaylistAdapter.setCurrentTrack(it.id)
+                            checkIsFavorite(it.id)
+                        }
+                    }
+                }
+
+                // Слушаем состояние воспроизведения (Play/Pause)
+                launch {
+                    mainViewModel.isPlaying.collectLatest { isPlaying ->
+                        binding.btnPlayPause.setImageResource(
+                            if (isPlaying) android.R.drawable.ic_media_pause 
+                            else android.R.drawable.ic_media_play
+                        )
+                        if (isPlaying) handler.post(updateSeekBarTask)
+                        else handler.removeCallbacks(updateSeekBarTask)
+                    }
+                }
+
+                // Слушаем плейлист
+                launch {
+                    mainViewModel.playlist.collectLatest { tracks ->
+                        smallPlaylistAdapter.updateData(tracks)
+                    }
+                }
+
+                // Слушаем состояние таймера для иконки
+                launch {
+                    mainViewModel.sleepTimerManager.remainingTime.observe(viewLifecycleOwner) { remaining ->
+                        binding.btnSleepTimer.setImageResource(
+                            if (remaining > 0) R.drawable.ic_alarm_on else R.drawable.ic_alarm_off
+                        )
+                    }
                 }
             }
         }
     }
 
-    // Метод для проверки, добавлен ли трек в базу данных избранного
+    private fun setupRecyclerView() {
+        smallPlaylistAdapter = SmallPlaylistAdapter { clickedTrack ->
+            mainViewModel.playTrack(clickedTrack)
+        }
+        binding.rvSmallPlaylist.adapter = smallPlaylistAdapter
+    }
+
+    private fun setupListeners() {
+        binding.btnPlayPause.setOnClickListener {
+            mainViewModel.togglePlayPause()
+        }
+
+        binding.btnNext.setOnClickListener {
+            mainViewModel.skipToNext()
+        }
+
+        binding.btnPrev.setOnClickListener {
+            mainViewModel.skipToPrevious()
+        }
+
+        binding.seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) mainViewModel.seekTo(progress.toLong())
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        binding.detailsFavorite.setOnClickListener {
+            mainViewModel.currentTrack.value?.let { track ->
+                toggleFavorite(track)
+            }
+        }
+
+        binding.btnSleepTimer.setOnClickListener {
+            showSleepTimerDialog()
+        }
+    }
+
+    private fun showSleepTimerDialog() {
+        val options = arrayOf(
+            getString(R.string.minutes_5),
+            getString(R.string.minutes_15),
+            getString(R.string.minutes_30),
+            getString(R.string.minutes_60),
+            getString(R.string.timer_off)
+        )
+        val minutes = intArrayOf(5, 15, 30, 60, 0)
+
+        androidx.appcompat.app.AlertDialog.Builder(requireContext(), R.style.TimerDialogTheme)
+            .setTitle(R.string.sleep_timer_title)
+            .setItems(options) { _, which ->
+                val selectedMinutes = minutes[which]
+                if (selectedMinutes > 0) {
+                    mainViewModel.sleepTimerManager.startTimer(selectedMinutes) {
+                        mainViewModel.getController()?.pause()
+                    }
+                    Toast.makeText(
+                        requireContext(),
+                        getString(R.string.timer_set, selectedMinutes),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    mainViewModel.sleepTimerManager.stopTimer()
+                    Toast.makeText(
+                        requireContext(),
+                        R.string.timer_stopped,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+            .show()
+    }
+
+    private fun updateUI(track: Track) {
+        binding.detailsTitle.text = track.name
+        binding.detailsArtist.text = track.artistName
+        binding.detailsPoster.load(track.imageUrl) {
+            crossfade(true)
+            placeholder(R.drawable.ic_launcher_background)
+        }
+        
+        mainViewModel.getController()?.let { p ->
+            val duration = p.duration
+            if (duration > 0) {
+                binding.seekBar.max = duration.toInt()
+                binding.tvTotalTime.text = TimeUtils.formatTime(duration)
+            } else {
+                // Если плеер еще не знает длительность (например, только начал загрузку),
+                // берем данные из модели трека (Jamendo отдает в секундах)
+                val totalMs = track.duration.toLong() * 1000
+                binding.seekBar.max = totalMs.toInt()
+                binding.tvTotalTime.text = TimeUtils.formatTime(totalMs)
+            }
+        }
+    }
+
     private fun checkIsFavorite(trackId: String) {
         viewLifecycleOwner.lifecycleScope.launch {
             val isFav = trackDao.isFavorite(trackId)
@@ -94,22 +229,16 @@ class PlayerFragment : Fragment() {
         }
     }
 
-    // Метод для добавления или удаления трека из списка избранного
     private fun toggleFavorite(track: Track) {
         viewLifecycleOwner.lifecycleScope.launch {
             val isCurrentlyFav = trackDao.isFavorite(track.id)
             val newFavStatus = !isCurrentlyFav
             
-            // Проверяем, есть ли трек вообще в базе (любой: в кэше или избранном)
-            // Мы можем использовать тот же isFavorite или отдельный метод. 
-            // Но проще всего попробовать обновить флаг, и если ничего не обновилось - вставить.
+            trackDao.updateFavoriteStatus(track.id, newFavStatus)
             
-            val updated = trackDao.updateFavoriteStatus(track.id, newFavStatus)
-            
-            // Если трек новый (например, из поиска) и его не было в базе - вставляем
-            // Так как updateFavoriteStatus возвращает Unit, проверим существование вручную
+            // Если трека не было в базе, вставляем его
             if (!trackDao.isFavorite(track.id) && !isCurrentlyFav) {
-                 val entity = TrackEntity(
+                val entity = TrackEntity(
                     id = track.id,
                     name = track.name,
                     duration = track.duration,
@@ -121,86 +250,18 @@ class PlayerFragment : Fragment() {
                     category = "" 
                 )
                 trackDao.insertTrack(entity)
-            } else {
-                trackDao.updateFavoriteStatus(track.id, newFavStatus)
             }
 
-            // Обновляем иконку сразу после изменения
-            _binding?.let {
-                it.detailsFavorite.setImageResource(
-                    if (newFavStatus) R.drawable.ic_star else R.drawable.ic_star_border
-                )
-            }
+            checkIsFavorite(track.id)
         }
     }
 
-    // Метод для настройки элементов интерфейса (текст, обложка, кнопки)
-    private fun setupUI(track: Track) {
-        binding.detailsTitle.text = track.name
-        binding.detailsArtist.text = track.artistName
-        binding.detailsPoster.load(track.imageUrl) {
-            crossfade(true)
-            placeholder(R.drawable.ic_launcher_background)
-        }
-
-        binding.detailsFavorite.setOnClickListener {
-            toggleFavorite(track)
-        }
-
-        binding.btnPlayPause.setOnClickListener {
-            if (player?.isPlaying == true) {
-                player?.pause()
-                binding.btnPlayPause.setImageResource(android.R.drawable.ic_media_play)
-            } else {
-                player?.play()
-                binding.btnPlayPause.setImageResource(android.R.drawable.ic_media_pause)
-            }
-        }
-
-        binding.seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) player?.seekTo(progress.toLong())
-            }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
-    }
-
-    // Метод для инициализации ExoPlayer и запуска потокового аудио
-    private fun setupPlayer(url: String?) {
-        if (url == null) return
-
-        player = ExoPlayer.Builder(requireContext()).build().apply {
-            val mediaItem = MediaItem.fromUri(url)
-            setMediaItem(mediaItem)
-            prepare()
-            playWhenReady = true
-        }
-
-        player?.addListener(object : androidx.media3.common.Player.Listener {
-            override fun onPlaybackStateChanged(state: Int) {
-                _binding?.let { b ->
-                    if (state == androidx.media3.common.Player.STATE_READY) {
-                        b.seekBar.max = player?.duration?.toInt() ?: 0
-                        handler.post(updateSeekBarTask)
-                        b.btnPlayPause.setImageResource(android.R.drawable.ic_media_pause)
-                    }
-                }
-            }
-        })
-    }
-
-    // Метод для остановки воспроизведения и освобождения ресурсов плеера
     override fun onStop() {
         super.onStop()
-        // Останавливаем музыку при уходе с экрана, чтобы избежать ошибок навигации
-        player?.stop()
-        player?.release()
-        player = null
+        // Теперь мы НЕ останавливаем плеер здесь!
         handler.removeCallbacks(updateSeekBarTask)
     }
 
-    // Метод для очистки ресурсов binding
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null

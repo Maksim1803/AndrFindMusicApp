@@ -8,8 +8,6 @@ import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.example.andrfindmusicapp.R
@@ -19,12 +17,10 @@ import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.FragmentHomeBinding
 import com.example.andrfindmusicapp.ui.home.adapter.HomeAdapter
 import com.example.andrfindmusicapp.ui.player.PlayerViewModel
-import com.example.andrfindmusicapp.utils.PreferenceProvider
 import com.example.andrfindmusicapp.viewmodel.HomeViewModel
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-
-import dagger.hilt.android.AndroidEntryPoint
 
 // Класс для главного экрана приложения, отображающего список треков и поиск
 @AndroidEntryPoint

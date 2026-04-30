@@ -11,8 +11,13 @@
     <color name="gradient_top">#AA2FFE</color>
     <color name="bottom_nav_bg">#008FFF</color>
     <color name="item_background">#CCFFFFFF</color>
+    <color name="item_playing_background">#AADDDDDD</color>
     <color name="search_background">#F0F0F0</color>
     <color name="search_stroke">#CCCCCC</color>
+
+    <color name="timer_dialog_bg">#87CEEB</color>
+    <color name="timer_dialog_text">#000000</color>
+    <color name="player_icon_tint">#3700B3</color>
 
     <!-- Dark Theme Gradient -->
     <color name="dark_gradient_top">#001B51</color>
