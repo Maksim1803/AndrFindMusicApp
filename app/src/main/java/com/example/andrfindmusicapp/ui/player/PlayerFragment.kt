@@ -160,6 +160,7 @@ class PlayerFragment : Fragment() {
         }
     }
 
+    // Метод для отображения диалога выбора времени таймера сна
     private fun showSleepTimerDialog() {
         val options = arrayOf(
             getString(R.string.minutes_5),
@@ -169,10 +170,14 @@ class PlayerFragment : Fragment() {
             getString(R.string.timer_off)
         )
         val minutes = intArrayOf(5, 15, 30, 60, 0)
+        
+        // Определяем индекс текущего выбранного значения
+        val currentSelected = mainViewModel.sleepTimerManager.selectedMinutes
+        val checkedItem = minutes.indexOf(currentSelected).let { if (it == -1) 4 else it }
 
         androidx.appcompat.app.AlertDialog.Builder(requireContext(), R.style.TimerDialogTheme)
             .setTitle(R.string.sleep_timer_title)
-            .setItems(options) { _, which ->
+            .setSingleChoiceItems(options, checkedItem) { dialog, which ->
                 val selectedMinutes = minutes[which]
                 if (selectedMinutes > 0) {
                     mainViewModel.sleepTimerManager.startTimer(selectedMinutes) {
@@ -191,6 +196,7 @@ class PlayerFragment : Fragment() {
                         Toast.LENGTH_SHORT
                     ).show()
                 }
+                dialog.dismiss()
             }
             .show()
     }

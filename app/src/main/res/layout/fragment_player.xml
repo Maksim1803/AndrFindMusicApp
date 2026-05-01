@@ -121,16 +121,6 @@
             android:contentDescription="Next"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_media_next" />
-
-        <ImageButton
-            android:id="@+id/btn_sleep_timer"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:contentDescription="@string/sleep_timer_content_description"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_alarm_off"
-            app:tint="@color/player_icon_tint" />
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
@@ -156,6 +146,19 @@
         android:src="@drawable/ic_star_border"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
+        app:tint="@color/player_icon_tint" />
+
+    <ImageButton
+        android:id="@+id/btn_sleep_timer"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginTop="8dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/sleep_timer_content_description"
+        android:src="@drawable/ic_alarm_off"
+        app:layout_constraintEnd_toEndOf="@+id/details_favorite"
+        app:layout_constraintStart_toStartOf="@+id/details_favorite"
+        app:layout_constraintTop_toBottomOf="@+id/details_favorite"
         app:tint="@color/player_icon_tint" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

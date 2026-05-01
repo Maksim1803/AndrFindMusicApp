@@ -16,9 +16,13 @@ class SleepTimerManager @Inject constructor() {
     private val _remainingTime = MutableLiveData<Long>(0L)
     val remainingTime: LiveData<Long> = _remainingTime
 
+    private var _selectedMinutes = 0
+    val selectedMinutes: Int get() = _selectedMinutes
+
     // Метод для запуска таймера на указанное количество минут
     fun startTimer(minutes: Int, onTimerFinished: () -> Unit) {
         stopTimer()
+        _selectedMinutes = minutes
         val millis = minutes * 60 * 1000L
         _remainingTime.value = millis
         
@@ -27,6 +31,7 @@ class SleepTimerManager @Inject constructor() {
                 val current = _remainingTime.value ?: 0L
                 if (current <= 1000L) {
                     _remainingTime.value = 0L
+                    _selectedMinutes = 0
                     onTimerFinished()
                 } else {
                     _remainingTime.value = current - 1000L
@@ -42,6 +47,7 @@ class SleepTimerManager @Inject constructor() {
         timerRunnable?.let { handler.removeCallbacks(it) }
         timerRunnable = null
         _remainingTime.value = 0L
+        _selectedMinutes = 0
     }
     
     // Метод для проверки, запущен ли таймер в данный момент
