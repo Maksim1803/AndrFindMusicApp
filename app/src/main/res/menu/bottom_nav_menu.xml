@@ -16,4 +16,8 @@
         android:id="@+id/navigation_categories"
         android:icon="@drawable/ic_settings"
         android:title="@string/categories_tab" />
+    <item
+        android:id="@+id/navigation_local"
+        android:icon="@drawable/ic_lyrics"
+        android:title="@string/local_tracks_tab" />
 </menu>

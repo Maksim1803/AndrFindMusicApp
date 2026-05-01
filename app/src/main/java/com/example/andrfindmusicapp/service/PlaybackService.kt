@@ -7,6 +7,7 @@ import androidx.media3.session.MediaSessionService
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
+// Класс для реализации фонового сервиса воспроизведения медиа
 @AndroidEntryPoint
 class PlaybackService : MediaSessionService() {
 
@@ -20,6 +21,7 @@ class PlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, player).build()
     }
 
+    // Метод для предоставления сессии контроллеру
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
         return mediaSession
     }

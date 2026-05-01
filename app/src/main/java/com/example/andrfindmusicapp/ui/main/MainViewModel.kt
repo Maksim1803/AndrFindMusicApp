@@ -40,6 +40,9 @@ class MainViewModel @Inject constructor(
     private val _playlist = MutableStateFlow<List<Track>>(emptyList())
     val playlist = _playlist.asStateFlow()
 
+    private val _favoriteIds = MutableStateFlow<Set<String>>(emptySet())
+    val favoriteIds = _favoriteIds.asStateFlow()
+
     private var controller: MediaController? = null
 
     init {
@@ -69,37 +72,84 @@ class MainViewModel @Inject constructor(
                 .map { entities -> entities.map { it.toTrack() } }
                 .distinctUntilChanged()
                 .collectLatest { tracks ->
-                    _playlist.value = tracks
-                    
-                    val mediaItems = tracks.map { track ->
-                        MediaItem.Builder()
-                            .setMediaId(track.id)
-                            .setUri(track.audioUrl)
-                            .setMediaMetadata(
-                                androidx.media3.common.MediaMetadata.Builder()
-                                    .setTitle(track.name)
-                                    .setArtist(track.artistName)
-                                    .build()
-                            )
-                            .build()
+                    _favoriteIds.value = tracks.map { it.id }.toSet()
+                    if (_playlist.value.isEmpty()) {
+                        _playlist.value = tracks
+                        updateControllerPlaylist(tracks)
                     }
-                    controller?.setMediaItems(mediaItems)
                 }
+        }
+    }
+
+    // Метод для обновления плейлиста в медиа-контроллере
+    private fun updateControllerPlaylist(tracks: List<Track>) {
+        val mediaItems = tracks.map { track ->
+            MediaItem.Builder()
+                .setMediaId(track.id)
+                .setUri(track.audioUrl)
+                .setMediaMetadata(
+                    androidx.media3.common.MediaMetadata.Builder()
+                        .setTitle(track.name)
+                        .setArtist(track.artistName)
+                        .build()
+                )
+                .build()
+        }
+        controller?.setMediaItems(mediaItems)
+    }
+
+    // Метод для добавления или удаления трека из избранного
+    fun toggleFavorite(track: Track) {
+        viewModelScope.launch {
+            val isCurrentlyFav = trackDao.isFavorite(track.id)
+            if (isCurrentlyFav) {
+                trackDao.updateFavoriteStatus(track.id, false)
+            } else {
+                val entity = com.example.andrfindmusicapp.data.local.TrackEntity(
+                    id = track.id,
+                    name = track.name,
+                    duration = track.duration,
+                    artistName = track.artistName,
+                    albumName = track.albumName,
+                    imageUrl = track.imageUrl,
+                    audioUrl = track.audioUrl,
+                    isFavorite = true,
+                    category = ""
+                )
+                trackDao.insertTrack(entity)
+                trackDao.updateFavoriteStatus(track.id, true)
+            }
         }
     }
 
     // Метод для воспроизведения конкретного трека
     fun playTrack(track: Track) {
-        // Если этот трек уже играет, ничего не делаем
-        if (controller?.currentMediaItem?.mediaId == track.id && controller?.isPlaying == true) {
-            return
+        playTrackWithPlaylist(track, _playlist.value)
+    }
+
+    // Метод для воспроизведения трека с установкой нового плейлиста
+    fun playTrackWithPlaylist(track: Track, newPlaylist: List<Track>) {
+        if (newPlaylist.isNotEmpty() && _playlist.value != newPlaylist) {
+            _playlist.value = newPlaylist
+            val mediaItems = newPlaylist.map { t ->
+                MediaItem.Builder()
+                    .setMediaId(t.id)
+                    .setUri(t.audioUrl)
+                    .setMediaMetadata(
+                        androidx.media3.common.MediaMetadata.Builder()
+                            .setTitle(t.name)
+                            .setArtist(t.artistName)
+                            .build()
+                    )
+                    .build()
+            }
+            controller?.setMediaItems(mediaItems)
         }
 
         val index = _playlist.value.indexOfFirst { it.id == track.id }
         if (index != -1) {
             controller?.seekTo(index, 0)
         } else {
-            // Если трека нет в плейлисте (например, из поиска), добавляем его временно
             val mediaItem = MediaItem.Builder()
                 .setMediaId(track.id)
                 .setUri(track.audioUrl)
@@ -148,6 +198,7 @@ class MainViewModel @Inject constructor(
         audioUrl = audioUrl ?: ""
     )
 
+    // Метод для очистки ресурсов при уничтожении ViewModel
     override fun onCleared() {
         super.onCleared()
         controller?.release()

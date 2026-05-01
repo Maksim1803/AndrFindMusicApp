@@ -15,7 +15,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import coil.load
 import com.example.andrfindmusicapp.R
-import com.example.andrfindmusicapp.data.local.TrackEntity
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.FragmentPlayerBinding
 import com.example.andrfindmusicapp.ui.main.MainViewModel
@@ -25,6 +24,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+// Класс для отображения экрана плеера и управления воспроизведением
 @AndroidEntryPoint
 class PlayerFragment : Fragment() {
     private var _binding: FragmentPlayerBinding? = null
@@ -36,9 +36,21 @@ class PlayerFragment : Fragment() {
     private lateinit var smallPlaylistAdapter: SmallPlaylistAdapter
     
     @javax.inject.Inject
-    lateinit var trackDao: com.example.andrfindmusicapp.data.local.TrackDao
+    lateinit var localTrackProvider: com.example.andrfindmusicapp.data.local.LocalTrackProvider
     
     private val handler = Handler(Looper.getMainLooper())
+    
+    // Регистратор для запроса разрешения на запись
+    private val requestPermissionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            mainViewModel.currentTrack.value?.let { downloadTrack(it) }
+        } else {
+            Toast.makeText(requireContext(), R.string.download_failed, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private val updateSeekBarTask = object : Runnable {
         override fun run() {
             _binding?.let { b ->
@@ -85,8 +97,44 @@ class PlayerFragment : Fragment() {
                         track?.let {
                             updateUI(it)
                             smallPlaylistAdapter.setCurrentTrack(it.id)
-                            checkIsFavorite(it.id)
+                            playerViewModel.clearLyrics()
+                            binding.lyricsContainer.visibility = View.GONE
+                            binding.rvSmallPlaylist.visibility = View.VISIBLE
                         }
+                    }
+                }
+
+                // Слушаем текст песни
+                launch {
+                    playerViewModel.lyrics.collectLatest { lyrics ->
+                        if (lyrics != null) {
+                            binding.tvLyrics.text = lyrics
+                        } else if (playerViewModel.isLyricsLoading.value.not() && binding.lyricsContainer.visibility == View.VISIBLE) {
+                            binding.tvLyrics.text = getString(R.string.no_lyrics_found)
+                        }
+                    }
+                }
+
+                // Слушаем состояние загрузки текста
+                launch {
+                    playerViewModel.isLyricsLoading.collectLatest { isLoading ->
+                        if (isLoading) {
+                            binding.tvLyrics.text = getString(R.string.loading_lyrics)
+                        }
+                    }
+                }
+
+                // Слушаем статус избранного для текущего трека
+                launch {
+                    kotlinx.coroutines.flow.combine(
+                        mainViewModel.currentTrack,
+                        mainViewModel.favoriteIds
+                    ) { track, favIds ->
+                        track?.id?.let { id -> favIds.contains(id) } ?: false
+                    }.collectLatest { isFav ->
+                        binding.detailsFavorite.setImageResource(
+                            if (isFav) R.drawable.ic_star else R.drawable.ic_star_border
+                        )
                     }
                 }
 
@@ -121,13 +169,20 @@ class PlayerFragment : Fragment() {
         }
     }
 
+    // Метод для настройки списка (RecyclerView) воспроизведения
     private fun setupRecyclerView() {
         smallPlaylistAdapter = SmallPlaylistAdapter { clickedTrack ->
             mainViewModel.playTrack(clickedTrack)
         }
-        binding.rvSmallPlaylist.adapter = smallPlaylistAdapter
+        binding.rvSmallPlaylist.apply {
+            adapter = smallPlaylistAdapter
+            // Включаем поддержку вложенной прокрутки и фиксированный размер для плавности
+            isNestedScrollingEnabled = true
+            setHasFixedSize(true)
+        }
     }
 
+    // Метод для настройки слушателей нажатий на кнопки
     private fun setupListeners() {
         binding.btnPlayPause.setOnClickListener {
             mainViewModel.togglePlayPause()
@@ -151,12 +206,106 @@ class PlayerFragment : Fragment() {
 
         binding.detailsFavorite.setOnClickListener {
             mainViewModel.currentTrack.value?.let { track ->
-                toggleFavorite(track)
+                mainViewModel.toggleFavorite(track)
             }
         }
 
         binding.btnSleepTimer.setOnClickListener {
             showSleepTimerDialog()
+        }
+
+        binding.btnShare.setOnClickListener {
+            mainViewModel.currentTrack.value?.let { track ->
+                shareTrack(track)
+            }
+        }
+
+        binding.btnDownload.setOnClickListener {
+            mainViewModel.currentTrack.value?.let { track ->
+                checkPermissionAndDownload(track)
+            }
+        }
+
+        binding.btnDeletePlayer.setOnClickListener {
+            mainViewModel.currentTrack.value?.let { track ->
+                showDeleteConfirmation(track)
+            }
+        }
+
+        binding.btnLyrics.setOnClickListener {
+            if (binding.lyricsContainer.visibility == View.VISIBLE) {
+                binding.lyricsContainer.visibility = View.GONE
+                binding.rvSmallPlaylist.visibility = View.VISIBLE
+            } else {
+                binding.lyricsContainer.visibility = View.VISIBLE
+                binding.rvSmallPlaylist.visibility = View.GONE
+                mainViewModel.currentTrack.value?.let { track ->
+                    if (playerViewModel.lyrics.value == null) {
+                        playerViewModel.loadLyrics(track.id)
+                    }
+                }
+            }
+        }
+    }
+
+    // Метод для проверки разрешений перед скачиванием
+    private fun checkPermissionAndDownload(track: Track) {
+        if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.P) {
+            // Для Android 9 и ниже нужно разрешение на запись
+            val permission = android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    requireContext(),
+                    permission
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                downloadTrack(track)
+            } else {
+                requestPermissionLauncher.launch(permission)
+            }
+        } else {
+            // Для Android 10+ (API 29+) разрешение на запись в Downloads не требуется
+            downloadTrack(track)
+        }
+    }
+
+    // Метод для реализации функции "Поделиться"
+    private fun shareTrack(track: Track) {
+        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_SUBJECT, track.name)
+            val text = getString(R.string.share_text, track.name, track.artistName)
+            putExtra(android.content.Intent.EXTRA_TEXT, "$text\n${track.audioUrl}")
+        }
+        startActivity(android.content.Intent.createChooser(shareIntent, getString(R.string.share_content_description)))
+    }
+
+    // Метод для загрузки трека на устройство
+    private fun downloadTrack(track: Track) {
+        try {
+            // Очищаем имя файла от недопустимых символов
+            val fileName = "${track.name} - ${track.artistName}.mp3".replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            
+            val request = android.app.DownloadManager.Request(android.net.Uri.parse(track.audioUrl))
+                .setTitle(track.name)
+                .setDescription(track.artistName)
+                .setMimeType("audio/mpeg") // Указываем тип файла, чтобы система знала, чем его открыть
+                .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, fileName)
+                .setAllowedOverMetered(true)
+                .setAllowedOverRoaming(true)
+            
+            // Для Android 9 и ниже разрешаем сканирование, чтобы файл сразу появился в медиатеке
+            if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.P) {
+                request.allowScanningByMediaScanner()
+            }
+
+            val downloadManager = requireContext().getSystemService(android.content.Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
+            downloadManager.enqueue(request)
+            
+            Toast.makeText(requireContext(), R.string.download_started, Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            android.util.Log.e("PlayerFragment", "Download failed: ${e.message}", e)
+            Toast.makeText(requireContext(), "${getString(R.string.download_failed)}: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -201,65 +350,46 @@ class PlayerFragment : Fragment() {
             .show()
     }
 
+    private fun showDeleteConfirmation(track: Track) {
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle(R.string.delete_track_title)
+            .setMessage(getString(R.string.delete_track_message, track.name))
+            .setPositiveButton(R.string.delete_confirm) { _, _ ->
+                deleteLocalTrack(track)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun deleteLocalTrack(track: Track) {
+        if (localTrackProvider.deleteTrack(track)) {
+            mainViewModel.skipToNext()
+            android.widget.Toast.makeText(requireContext(), R.string.track_deleted, android.widget.Toast.LENGTH_SHORT).show()
+        } else {
+            // Если удаление через MediaStore требует разрешений или не сработало напрямую (Android 11+)
+            // В идеале здесь должна быть обработка RecoverableSecurityException
+            android.widget.Toast.makeText(requireContext(), R.string.delete_failed, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Метод для обновления интерфейса данными о треке
     private fun updateUI(track: Track) {
         binding.detailsTitle.text = track.name
         binding.detailsArtist.text = track.artistName
         binding.detailsPoster.load(track.imageUrl) {
             crossfade(true)
-            placeholder(R.drawable.ic_launcher_background)
+            placeholder(android.R.drawable.ic_menu_gallery)
+            error(android.R.drawable.ic_menu_gallery)
         }
         
-        mainViewModel.getController()?.let { p ->
-            val duration = p.duration
-            if (duration > 0) {
-                binding.seekBar.max = duration.toInt()
-                binding.tvTotalTime.text = TimeUtils.formatTime(duration)
-            } else {
-                // Если плеер еще не знает длительность (например, только начал загрузку),
-                // берем данные из модели трека (Jamendo отдает в секундах)
-                val totalMs = track.duration.toLong() * 1000
-                binding.seekBar.max = totalMs.toInt()
-                binding.tvTotalTime.text = TimeUtils.formatTime(totalMs)
-            }
-        }
-    }
+        // Устанавливаем максимальное значение SeekBar в миллисекундах
+        binding.seekBar.max = track.duration * 1000
+        binding.tvTotalTime.text = TimeUtils.formatSeconds(track.duration)
 
-    private fun checkIsFavorite(trackId: String) {
-        viewLifecycleOwner.lifecycleScope.launch {
-            val isFav = trackDao.isFavorite(trackId)
-            _binding?.let {
-                it.detailsFavorite.setImageResource(
-                    if (isFav) R.drawable.ic_star else R.drawable.ic_star_border
-                )
-            }
-        }
-    }
-
-    private fun toggleFavorite(track: Track) {
-        viewLifecycleOwner.lifecycleScope.launch {
-            val isCurrentlyFav = trackDao.isFavorite(track.id)
-            val newFavStatus = !isCurrentlyFav
-            
-            trackDao.updateFavoriteStatus(track.id, newFavStatus)
-            
-            // Если трека не было в базе, вставляем его
-            if (!trackDao.isFavorite(track.id) && !isCurrentlyFav) {
-                val entity = TrackEntity(
-                    id = track.id,
-                    name = track.name,
-                    duration = track.duration,
-                    artistName = track.artistName,
-                    albumName = track.albumName,
-                    imageUrl = track.imageUrl,
-                    audioUrl = track.audioUrl,
-                    isFavorite = true,
-                    category = "" 
-                )
-                trackDao.insertTrack(entity)
-            }
-
-            checkIsFavorite(track.id)
-        }
+        val isLocal = track.audioUrl.startsWith("content://") || track.audioUrl.startsWith("file://")
+        binding.btnDeletePlayer.visibility = if (isLocal) View.VISIBLE else View.GONE
+        binding.btnDownload.visibility = if (isLocal) View.GONE else View.VISIBLE
+        binding.btnLyrics.visibility = if (isLocal) View.VISIBLE else View.GONE
     }
 
     override fun onStop() {

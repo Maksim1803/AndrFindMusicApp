@@ -50,6 +50,7 @@ class HomeViewModel @Inject constructor(
         fetchTracksByTag(category)
     }
 
+    // Метод для загрузки данных из локального кэша
     private fun loadFromCache(category: String) {
         viewModelScope.launch {
             trackDao.getTracksByCategory(category).collect { entities ->
@@ -60,6 +61,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    // Метод для запроса треков по тегу из API
     private fun fetchTracksByTag(tag: String) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -85,6 +87,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    // Метод для преобразования модели Track в сущность базы данных TrackEntity
     private fun mapToEntity(track: Track, category: String): TrackEntity {
         return TrackEntity(
             id = track.id,
@@ -99,6 +102,7 @@ class HomeViewModel @Inject constructor(
         )
     }
 
+    // Метод для преобразования сущности TrackEntity в доменную модель Track
     private fun mapToDomain(entity: TrackEntity): Track {
         return Track(
             id = entity.id,
@@ -112,6 +116,7 @@ class HomeViewModel @Inject constructor(
     }
 
     // ... остальной код doPagination и прочее (оставим без изменений логику)
+    // Метод для обработки пагинации при скролле
     fun doPagination(visibleItemCount: Int, totalItemCount: Int, pastVisibleItemCount: Int) {
         if (isPaginationLoading || isLastPage) return
 
@@ -120,6 +125,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    // Метод для загрузки следующей страницы результатов
     private fun loadNextPage() {
         isPaginationLoading = true
         currentOffset += limit
@@ -148,6 +154,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    // Метод для поиска треков по текстовому запросу
     fun searchTracks(query: String) {
         if (query.isBlank()) {
             loadLastCategoryTracks()
@@ -171,12 +178,14 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    // Метод для сброса состояния пагинации
     private fun resetPagination() {
         currentOffset = 0
         isLastPage = false
         isPaginationLoading = false
     }
 
+    // Метод для обновления состояния пагинации на основе размера последнего результата
     private fun updatePaginationState(lastResultSize: Int) {
         if (lastResultSize < limit) {
             isLastPage = true

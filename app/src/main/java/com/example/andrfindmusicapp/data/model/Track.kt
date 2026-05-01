@@ -18,3 +18,13 @@ data class Track(
 data class JamendoResponse(
     val results: List<Track>
 )
+
+// Модели для получения текста песни
+data class LyricsResponse(
+    val results: List<LyricsResult>
+)
+
+data class LyricsResult(
+    val id: String,
+    val lyrics: String
+)
