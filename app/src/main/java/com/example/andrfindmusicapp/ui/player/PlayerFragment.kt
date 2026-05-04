@@ -34,6 +34,7 @@ class PlayerFragment : Fragment() {
     private val playerViewModel: PlayerViewModel by activityViewModels()
     
     private lateinit var smallPlaylistAdapter: SmallPlaylistAdapter
+    private var currentToast: Toast? = null
     
     @javax.inject.Inject
     lateinit var localTrackProvider: com.example.andrfindmusicapp.data.local.LocalTrackProvider
@@ -47,8 +48,16 @@ class PlayerFragment : Fragment() {
         if (isGranted) {
             mainViewModel.currentTrack.value?.let { downloadTrack(it) }
         } else {
-            Toast.makeText(requireContext(), R.string.download_failed, Toast.LENGTH_SHORT).show()
+            showToast(R.string.download_failed)
         }
+    }
+
+    // Метод для вывода всплывающих уведомлений с автоматической отменой предыдущих
+    private fun showToast(messageResId: Int, vararg args: Any) {
+        currentToast?.cancel()
+        val message = if (args.isEmpty()) getString(messageResId) else getString(messageResId, *args)
+        currentToast = Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT)
+        currentToast?.show()
     }
 
     private val updateSeekBarTask = object : Runnable {
@@ -88,6 +97,7 @@ class PlayerFragment : Fragment() {
         setupListeners()
     }
 
+    // Метод для инициализации наблюдателей за LiveData и Flow
     private fun setupObservers() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -176,7 +186,6 @@ class PlayerFragment : Fragment() {
         }
         binding.rvSmallPlaylist.apply {
             adapter = smallPlaylistAdapter
-            // Включаем поддержку вложенной прокрутки и фиксированный размер для плавности
             isNestedScrollingEnabled = true
             setHasFixedSize(true)
         }
@@ -248,10 +257,9 @@ class PlayerFragment : Fragment() {
         }
     }
 
-    // Метод для проверки разрешений перед скачиванием
+    // Метод для проверки разрешений и запуска скачивания трека
     private fun checkPermissionAndDownload(track: Track) {
         if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.P) {
-            // Для Android 9 и ниже нужно разрешение на запись
             val permission = android.Manifest.permission.WRITE_EXTERNAL_STORAGE
             if (androidx.core.content.ContextCompat.checkSelfPermission(
                     requireContext(),
@@ -263,38 +271,38 @@ class PlayerFragment : Fragment() {
                 requestPermissionLauncher.launch(permission)
             }
         } else {
-            // Для Android 10+ (API 29+) разрешение на запись в Downloads не требуется
             downloadTrack(track)
         }
     }
 
-    // Метод для реализации функции "Поделиться"
+    // Метод для шаринга информации о треке в другие приложения
     private fun shareTrack(track: Track) {
         val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(android.content.Intent.EXTRA_SUBJECT, track.name)
-            val text = getString(R.string.share_text, track.name, track.artistName)
-            putExtra(android.content.Intent.EXTRA_TEXT, "$text\n${track.audioUrl}")
+            val trackName = track.name ?: "Unknown"
+            val artistName = track.artistName ?: "Unknown Artist"
+            putExtra(android.content.Intent.EXTRA_SUBJECT, trackName)
+            val text = getString(R.string.share_text, trackName, artistName)
+            putExtra(android.content.Intent.EXTRA_TEXT, "$text\n${track.audioUrl ?: ""}")
         }
         startActivity(android.content.Intent.createChooser(shareIntent, getString(R.string.share_content_description)))
     }
 
-    // Метод для загрузки трека на устройство
+    // Метод для постановки трека в очередь загрузки DownloadManager
     private fun downloadTrack(track: Track) {
+        val url = track.audioUrl ?: return
         try {
-            // Очищаем имя файла от недопустимых символов
-            val fileName = "${track.name} - ${track.artistName}.mp3".replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            val trackName = track.name ?: "Unknown"
+            val artistName = track.artistName ?: "Unknown Artist"
+            val fileName = "$trackName - $artistName.mp3".replace(Regex("[\\\\/:*?\"<>|]"), "_")
             
-            val request = android.app.DownloadManager.Request(android.net.Uri.parse(track.audioUrl))
-                .setTitle(track.name)
-                .setDescription(track.artistName)
-                .setMimeType("audio/mpeg") // Указываем тип файла, чтобы система знала, чем его открыть
+            val request = android.app.DownloadManager.Request(android.net.Uri.parse(url))
+                .setTitle(trackName)
+                .setDescription(artistName)
+                .setMimeType("audio/mpeg")
                 .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, fileName)
-                .setAllowedOverMetered(true)
-                .setAllowedOverRoaming(true)
             
-            // Для Android 9 и ниже разрешаем сканирование, чтобы файл сразу появился в медиатеке
             if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.P) {
                 request.allowScanningByMediaScanner()
             }
@@ -302,10 +310,9 @@ class PlayerFragment : Fragment() {
             val downloadManager = requireContext().getSystemService(android.content.Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
             downloadManager.enqueue(request)
             
-            Toast.makeText(requireContext(), R.string.download_started, Toast.LENGTH_SHORT).show()
+            showToast(R.string.download_started)
         } catch (e: Exception) {
-            android.util.Log.e("PlayerFragment", "Download failed: ${e.message}", e)
-            Toast.makeText(requireContext(), "${getString(R.string.download_failed)}: ${e.message}", Toast.LENGTH_LONG).show()
+            showToast(R.string.download_failed)
         }
     }
 
@@ -319,8 +326,6 @@ class PlayerFragment : Fragment() {
             getString(R.string.timer_off)
         )
         val minutes = intArrayOf(5, 15, 30, 60, 0)
-        
-        // Определяем индекс текущего выбранного значения
         val currentSelected = mainViewModel.sleepTimerManager.selectedMinutes
         val checkedItem = minutes.indexOf(currentSelected).let { if (it == -1) 4 else it }
 
@@ -332,28 +337,21 @@ class PlayerFragment : Fragment() {
                     mainViewModel.sleepTimerManager.startTimer(selectedMinutes) {
                         mainViewModel.getController()?.pause()
                     }
-                    Toast.makeText(
-                        requireContext(),
-                        getString(R.string.timer_set, selectedMinutes),
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    showToast(R.string.timer_set, selectedMinutes)
                 } else {
                     mainViewModel.sleepTimerManager.stopTimer()
-                    Toast.makeText(
-                        requireContext(),
-                        R.string.timer_stopped,
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    showToast(R.string.timer_stopped)
                 }
                 dialog.dismiss()
             }
             .show()
     }
 
+    // Метод для отображения подтверждения удаления локального трека
     private fun showDeleteConfirmation(track: Track) {
         androidx.appcompat.app.AlertDialog.Builder(requireContext())
             .setTitle(R.string.delete_track_title)
-            .setMessage(getString(R.string.delete_track_message, track.name))
+            .setMessage(getString(R.string.delete_track_message, track.name ?: "Unknown"))
             .setPositiveButton(R.string.delete_confirm) { _, _ ->
                 deleteLocalTrack(track)
             }
@@ -361,32 +359,31 @@ class PlayerFragment : Fragment() {
             .show()
     }
 
+    // Метод для удаления локального файла трека из памяти устройства
     private fun deleteLocalTrack(track: Track) {
         if (localTrackProvider.deleteTrack(track)) {
             mainViewModel.skipToNext()
-            android.widget.Toast.makeText(requireContext(), R.string.track_deleted, android.widget.Toast.LENGTH_SHORT).show()
+            showToast(R.string.track_deleted)
         } else {
-            // Если удаление через MediaStore требует разрешений или не сработало напрямую (Android 11+)
-            // В идеале здесь должна быть обработка RecoverableSecurityException
-            android.widget.Toast.makeText(requireContext(), R.string.delete_failed, android.widget.Toast.LENGTH_SHORT).show()
+            showToast(R.string.delete_failed)
         }
     }
 
-    // Метод для обновления интерфейса данными о треке
+    // Метод для обновления элементов UI информацией о текущем треке
     private fun updateUI(track: Track) {
-        binding.detailsTitle.text = track.name
-        binding.detailsArtist.text = track.artistName
+        binding.detailsTitle.text = track.name ?: "Unknown"
+        binding.detailsArtist.text = track.artistName ?: "Unknown Artist"
         binding.detailsPoster.load(track.imageUrl) {
             crossfade(true)
             placeholder(android.R.drawable.ic_menu_gallery)
             error(android.R.drawable.ic_menu_gallery)
         }
         
-        // Устанавливаем максимальное значение SeekBar в миллисекундах
-        binding.seekBar.max = track.duration * 1000
-        binding.tvTotalTime.text = TimeUtils.formatSeconds(track.duration)
+        val duration = track.duration ?: 0
+        binding.seekBar.max = duration * 1000
+        binding.tvTotalTime.text = TimeUtils.formatSeconds(duration)
 
-        val isLocal = track.audioUrl.startsWith("content://") || track.audioUrl.startsWith("file://")
+        val isLocal = track.audioUrl?.startsWith("content://") == true || track.audioUrl?.startsWith("file://") == true
         binding.btnDeletePlayer.visibility = if (isLocal) View.VISIBLE else View.GONE
         binding.btnDownload.visibility = if (isLocal) View.GONE else View.VISIBLE
         binding.btnLyrics.visibility = if (isLocal) View.VISIBLE else View.GONE
@@ -394,7 +391,6 @@ class PlayerFragment : Fragment() {
 
     override fun onStop() {
         super.onStop()
-        // Теперь мы НЕ останавливаем плеер здесь!
         handler.removeCallbacks(updateSeekBarTask)
     }
 

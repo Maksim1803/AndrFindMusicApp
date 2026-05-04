@@ -43,6 +43,9 @@ class MainViewModel @Inject constructor(
     private val _favoriteIds = MutableStateFlow<Set<String>>(emptySet())
     val favoriteIds = _favoriteIds.asStateFlow()
 
+    private val _isLooping = MutableStateFlow(true) // По умолчанию включено
+    val isLooping = _isLooping.asStateFlow()
+
     private var controller: MediaController? = null
 
     init {
@@ -65,7 +68,18 @@ class MainViewModel @Inject constructor(
                         }
                     }
                 }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    // Реализация закольцовки: если плейлист закончился и включена закольцовка
+                    if (playbackState == Player.STATE_ENDED && _isLooping.value) {
+                        controller?.seekTo(0, 0)
+                        controller?.play()
+                    }
+                }
             })
+
+            // Устанавливаем режим повтора "All" для закольцовки внутри списка (Media3 сама умеет)
+            controller?.repeatMode = if (_isLooping.value) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
 
             // Автоматически подгружаем избранное как основной плейлист
             trackDao.getAllFavorites()
@@ -81,20 +95,24 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    // Вспомогательный метод для создания MediaItem из модели Track
+    private fun createMediaItem(track: Track): MediaItem {
+        return MediaItem.Builder()
+            .setMediaId(track.id)
+            .setUri(track.audioUrl ?: "")
+            .setMediaMetadata(
+                androidx.media3.common.MediaMetadata.Builder()
+                    .setTitle(track.name ?: "Unknown")
+                    .setArtist(track.artistName ?: "Unknown Artist")
+                    .setArtworkUri(if (track.imageUrl != null) android.net.Uri.parse(track.imageUrl) else null)
+                    .build()
+            )
+            .build()
+    }
+
     // Метод для обновления плейлиста в медиа-контроллере
     private fun updateControllerPlaylist(tracks: List<Track>) {
-        val mediaItems = tracks.map { track ->
-            MediaItem.Builder()
-                .setMediaId(track.id)
-                .setUri(track.audioUrl)
-                .setMediaMetadata(
-                    androidx.media3.common.MediaMetadata.Builder()
-                        .setTitle(track.name)
-                        .setArtist(track.artistName)
-                        .build()
-                )
-                .build()
-        }
+        val mediaItems = tracks.map { createMediaItem(it) }
         controller?.setMediaItems(mediaItems)
     }
 
@@ -107,61 +125,65 @@ class MainViewModel @Inject constructor(
             } else {
                 val entity = com.example.andrfindmusicapp.data.local.TrackEntity(
                     id = track.id,
-                    name = track.name,
-                    duration = track.duration,
-                    artistName = track.artistName,
-                    albumName = track.albumName,
-                    imageUrl = track.imageUrl,
-                    audioUrl = track.audioUrl,
+                    name = track.name ?: "Unknown",
+                    duration = track.duration ?: 0,
+                    artistName = track.artistName ?: "Unknown Artist",
+                    albumName = track.albumName ?: "Unknown Album",
+                    imageUrl = track.imageUrl ?: "",
+                    audioUrl = track.audioUrl ?: "",
                     isFavorite = true,
                     category = ""
                 )
                 trackDao.insertTrack(entity)
                 trackDao.updateFavoriteStatus(track.id, true)
+                // При добавлении в избранное также добавляем в текущую очередь
+                addToQueue(track)
             }
         }
     }
 
-    // Метод для воспроизведения конкретного трека
+    // Метод для воспроизведения конкретного трека с автоматическим добавлением в очередь
     fun playTrack(track: Track) {
-        playTrackWithPlaylist(track, _playlist.value)
-    }
-
-    // Метод для воспроизведения трека с установкой нового плейлиста
-    fun playTrackWithPlaylist(track: Track, newPlaylist: List<Track>) {
-        if (newPlaylist.isNotEmpty() && _playlist.value != newPlaylist) {
-            _playlist.value = newPlaylist
-            val mediaItems = newPlaylist.map { t ->
-                MediaItem.Builder()
-                    .setMediaId(t.id)
-                    .setUri(t.audioUrl)
-                    .setMediaMetadata(
-                        androidx.media3.common.MediaMetadata.Builder()
-                            .setTitle(t.name)
-                            .setArtist(t.artistName)
-                            .build()
-                    )
-                    .build()
-            }
-            controller?.setMediaItems(mediaItems)
-        }
-
         val index = _playlist.value.indexOfFirst { it.id == track.id }
         if (index != -1) {
             controller?.seekTo(index, 0)
         } else {
-            val mediaItem = MediaItem.Builder()
-                .setMediaId(track.id)
-                .setUri(track.audioUrl)
-                .build()
-            controller?.setMediaItem(mediaItem)
+            // Если трека нет в списке, добавляем его в конец и переходим к нему
+            addToQueue(track)
+            controller?.seekTo(_playlist.value.size - 1, 0)
         }
         controller?.prepare()
         controller?.play()
         _currentTrack.value = track
     }
 
-    // Метод для переключения состояния воспроизведения (пауза/старт)
+    // Метод для воспроизведения трека с установкой нового плейлиста (например, из поиска)
+    fun playTrackWithPlaylist(track: Track, newPlaylist: List<Track>) {
+        if (newPlaylist.isNotEmpty() && _playlist.value != newPlaylist) {
+            _playlist.value = newPlaylist
+            val mediaItems = newPlaylist.map { createMediaItem(it) }
+            controller?.setMediaItems(mediaItems)
+        }
+
+        val index = _playlist.value.indexOfFirst { it.id == track.id }
+        if (index != -1) {
+            controller?.seekTo(index, 0)
+        }
+        controller?.prepare()
+        controller?.play()
+        _currentTrack.value = track
+    }
+
+    // Метод для добавления трека в текущую очередь воспроизведения
+    fun addToQueue(track: Track) {
+        val currentList = _playlist.value.toMutableList()
+        if (!currentList.any { it.id == track.id }) {
+            currentList.add(track)
+            _playlist.value = currentList
+            
+            controller?.addMediaItem(createMediaItem(track))
+        }
+    }
     fun togglePlayPause() {
         if (controller?.isPlaying == true) {
             controller?.pause()
@@ -191,11 +213,11 @@ class MainViewModel @Inject constructor(
     private fun com.example.andrfindmusicapp.data.local.TrackEntity.toTrack() = Track(
         id = id,
         name = name,
-        duration = duration ?: 0,
-        artistName = artistName ?: "",
-        albumName = albumName ?: "",
-        imageUrl = imageUrl ?: "",
-        audioUrl = audioUrl ?: ""
+        duration = duration,
+        artistName = artistName,
+        albumName = albumName,
+        imageUrl = imageUrl,
+        audioUrl = audioUrl
     )
 
     // Метод для очистки ресурсов при уничтожении ViewModel

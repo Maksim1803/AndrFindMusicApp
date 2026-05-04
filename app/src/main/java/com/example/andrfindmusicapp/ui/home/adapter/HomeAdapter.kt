@@ -46,7 +46,7 @@ class HomeAdapter(
             title.text = track.name
             artist.text = track.artistName
             album.text = track.albumName
-            duration.text = TimeUtils.formatSeconds(track.duration)
+            duration.text = TimeUtils.formatSeconds(track.duration ?: 0)
             poster.load(track.imageUrl) {
                 crossfade(true)
                 placeholder(android.R.drawable.ic_menu_gallery)
@@ -69,7 +69,7 @@ class HomeAdapter(
             }
 
             // Показываем индикатор локального файла (дискету) на постере
-            val isLocal = track.audioUrl.startsWith("content://") || track.audioUrl.startsWith("file://")
+            val isLocal = track.audioUrl?.startsWith("content://") == true || track.audioUrl?.startsWith("file://") == true
             localIndicatorIcon.visibility = if (isLocal) android.view.View.VISIBLE else android.view.View.GONE
 
             root.setOnClickListener { onItemClick(track) }

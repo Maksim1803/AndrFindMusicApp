@@ -7,13 +7,14 @@ import retrofit2.http.Query
 
 // Интерфейс для работы с API Jamendo
 interface JamendoService {
-    // Метод для поиска треков по текстовому запросу
+    // Метод для поиска треков (используем широкий поиск 'search' для лучшей релевантности)
     @GET("v3.0/tracks/")
     suspend fun searchTracks(
         @Query("client_id") clientId: String = "59cb9dad",
         @Query("format") format: String = "json",
         @Query("search") query: String,
-        @Query("limit") limit: Int = 20,
+        @Query("order") order: String = "relevance",
+        @Query("limit") limit: Int = 50,
         @Query("offset") offset: Int = 0
     ): JamendoResponse
 

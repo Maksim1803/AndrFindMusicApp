@@ -11,13 +11,9 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.example.andrfindmusicapp.R
-import com.example.andrfindmusicapp.data.local.AppDatabase
-import com.example.andrfindmusicapp.data.local.TrackEntity
-import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.FragmentHomeBinding
 import com.example.andrfindmusicapp.ui.home.adapter.HomeAdapter
 import com.example.andrfindmusicapp.ui.main.MainViewModel
-import com.example.andrfindmusicapp.ui.player.PlayerViewModel
 import com.example.andrfindmusicapp.viewmodel.HomeViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
@@ -146,15 +142,23 @@ class HomeFragment : Fragment() {
         })
     }
 
-    // Метод для настройки поисковой строки
+    // Метод для настройки поисковой строки по образцу из FindAFilm
     private fun setupSearchView() {
         binding.searchViewHome.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            // Отрабатывает при нажатии кнопки "поиск" на клавиатуре
             override fun onQueryTextSubmit(query: String?): Boolean {
                 viewModel.searchTracks(query ?: "")
                 return true
             }
+            // Отрабатывает на каждое изменение текста (реактивный поиск)
             override fun onQueryTextChange(newText: String?): Boolean {
-                if (newText.isNullOrBlank()) viewModel.loadLastCategoryTracks()
+                // Если ввод пуст, возвращаем стандартный список (как в FindAFilm)
+                if (newText.isNullOrBlank()) {
+                    viewModel.loadLastCategoryTracks()
+                } else {
+                    // Иначе запускаем поиск (в ViewModel добавлена задержка и отмена старых запросов)
+                    viewModel.searchTracks(newText)
+                }
                 return true
             }
         })

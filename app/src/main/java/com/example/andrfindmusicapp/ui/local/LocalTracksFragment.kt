@@ -65,9 +65,7 @@ class LocalTracksFragment : Fragment() {
     private fun setupRecyclerView() {
         adapter = HomeAdapter(
             onItemClick = { track ->
-                // Передаем трек и весь список локальных треков как текущий плейлист
-                mainViewModel.playTrackWithPlaylist(track, viewModel.localTracks.value)
-                // Переходим на экран плеера
+                mainViewModel.playTrack(track)
                 findNavController().navigate(R.id.navigation_player)
             },
             onFavoriteClick = { track ->

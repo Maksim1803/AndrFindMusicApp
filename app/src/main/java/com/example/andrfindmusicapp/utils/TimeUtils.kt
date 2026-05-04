@@ -19,7 +19,7 @@ object TimeUtils {
     }
 
     // Метод для форматирования секунд в строку вида "mm:ss"
-    fun formatSeconds(seconds: Int): String {
-        return formatTime(seconds.toLong() * 1000)
+    fun formatSeconds(seconds: Int?): String {
+        return formatTime(seconds?.toLong()?.times(1000) ?: 0L)
     }
 }

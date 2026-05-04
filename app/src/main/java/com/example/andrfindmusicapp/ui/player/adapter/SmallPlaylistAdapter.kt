@@ -1,6 +1,5 @@
 package com.example.andrfindmusicapp.ui.player.adapter
 
-import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -56,7 +55,7 @@ class SmallPlaylistAdapter(
             smallDuration.text = TimeUtils.formatSeconds(track.duration)
             
             // Показываем дискету на мини-обложке, если трек локальный
-            val isLocal = track.audioUrl.startsWith("content://") || track.audioUrl.startsWith("file://")
+            val isLocal = track.audioUrl?.startsWith("content://") == true || track.audioUrl?.startsWith("file://") == true
             localIndicatorSmall.visibility = if (isLocal) View.VISIBLE else View.GONE
             
             // Подсветка фона и иконка треугольника

@@ -35,4 +35,18 @@
     <string name="share_text">Listening to %1$s by %2$s in AndrFindMusic app!</string>
     <string name="download_started">Download started...</string>
     <string name="download_failed">Download failed</string>
+    <string name="no_local_tracks">No local tracks found</string>
+    <string name="local_tracks_tab">My Music</string>
+    <string name="show_lyrics">Show Lyrics</string>
+    <string name="no_lyrics_found">Lyrics not found</string>
+    <string name="loading_lyrics">Loading lyrics...</string>
+    <string name="delete_track_title">Delete file?</string>
+    <string name="delete_track_message">Do you really want to delete %1$s from your device?</string>
+    <string name="delete_confirm">Delete</string>
+    <string name="cancel">Cancel</string>
+    <string name="local_file_desc">Local file</string>
+    <string name="delete_file_desc">Delete local file</string>
+    <string name="track_deleted">Track deleted</string>
+    <string name="delete_failed">Failed to delete file</string>
+    <string name="search_tab">Search</string>
 </resources>
