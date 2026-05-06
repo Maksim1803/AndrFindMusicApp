@@ -8,8 +8,10 @@ import com.example.andrfindmusicapp.data.local.TrackEntity
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.data.remote.RetrofitClient
 import com.example.andrfindmusicapp.utils.PreferenceProvider
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
+import java.util.Locale
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
@@ -26,12 +28,16 @@ class HomeViewModel @Inject constructor(
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> get() = _isLoading
 
+    // Список для локальной фильтрации (как в FindAFilm)
+    private var allTracksCached = listOf<Track>()
+    
     private var currentOffset = 0
     private val limit = 20
     private var isPaginationLoading = false
     private var isLastPage = false
     private var currentQuery: String? = null
     private var currentTag: String? = null
+    private var searchJob: Job? = null
 
     init {
         loadLastCategoryTracks()
@@ -43,102 +49,101 @@ class HomeViewModel @Inject constructor(
         resetPagination()
         currentTag = category
         currentQuery = null
-        
-        // Сначала пробуем загрузить из кэша
-        loadFromCache(category)
-        // Затем обновляем из сети
         fetchTracksByTag(category)
     }
 
-    private fun loadFromCache(category: String) {
-        viewModelScope.launch {
-            trackDao.getTracksByCategory(category).collect { entities ->
-                if (entities.isNotEmpty() && _tracks.value.isNullOrEmpty()) {
-                    _tracks.value = entities.map { mapToDomain(it) }
-                }
-            }
-        }
-    }
-
+    // Метод для запроса треков по тегу из API
     private fun fetchTracksByTag(tag: String) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
                 val response = RetrofitClient.jamendoService.getTracksByCategory(tag = tag, offset = currentOffset)
-                val domainTracks = response.results
+                val domainTracks = response.results ?: emptyList()
                 
-                if (currentOffset == 0) {
-                    trackDao.clearCacheByCategory(tag)
-                    _tracks.value = domainTracks
-                } else {
-                    _tracks.value = (_tracks.value ?: emptyList()) + domainTracks
-                }
+                allTracksCached = domainTracks
+                _tracks.value = domainTracks
                 
-                // Сохраняем в кэш
-                trackDao.upsertCacheTracks(domainTracks.map { mapToEntity(it, tag) })
                 updatePaginationState(domainTracks.size)
             } catch (e: Exception) {
-                // Если ошибка (нет интернета), данные из кэша уже на экране
+                e.printStackTrace()
             } finally {
                 _isLoading.value = false
             }
         }
     }
 
-    private fun mapToEntity(track: Track, category: String): TrackEntity {
-        return TrackEntity(
-            id = track.id,
-            name = track.name,
-            artistName = track.artistName,
-            albumName = track.albumName,
-            imageUrl = track.imageUrl,
-            audioUrl = track.audioUrl,
-            duration = track.duration,
-            category = category,
-            isFavorite = false // При кэшировании не сбрасываем существующий флаг (OnConflict.REPLACE обработает это, если мы не передадим старое значение, но в нашей схеме лучше аккуратно)
-        )
+    // Метод поиска, из FindAFilm
+    fun searchTracks(query: String) {
+        searchJob?.cancel()
+        
+        if (query.isEmpty()) {
+            _tracks.value = allTracksCached
+            return
+        }
+
+        // 1. Сначала делаем мгновенную локальную фильтрацию
+        val lowerQuery = query.lowercase(Locale.getDefault())
+        val localResult = allTracksCached.filter {
+            val nameMatch = it.name?.lowercase(Locale.getDefault())?.contains(lowerQuery) == true
+            val artistMatch = it.artistName?.lowercase(Locale.getDefault())?.contains(lowerQuery) == true
+            nameMatch || artistMatch
+        }
+        
+        // Сразу обновляем UI локальными данными
+        _tracks.value = localResult
+
+        // 2. Затем пробуем найти новые треки в сети с небольшой задержкой
+        searchJob = viewModelScope.launch {
+            delay(700)
+            currentQuery = query
+            currentTag = null
+            try {
+                val response = RetrofitClient.jamendoService.searchTracks(query = query)
+                val networkResults = response.results ?: emptyList()
+                
+                if (networkResults.isNotEmpty()) {
+                    // Объединяем результаты, убирая дубликаты по ID
+                    val combined = (localResult + networkResults).distinctBy { it.id }
+                    _tracks.value = combined
+                }
+            } catch (e: Exception) {
+                // Если сеть упала, у нас все еще есть локальные результаты
+            }
+        }
     }
 
-    private fun mapToDomain(entity: TrackEntity): Track {
-        return Track(
-            id = entity.id,
-            name = entity.name,
-            artistName = entity.artistName,
-            albumName = entity.albumName,
-            imageUrl = entity.imageUrl,
-            audioUrl = entity.audioUrl,
-            duration = entity.duration
-        )
+    // Метод для сброса состояния пагинации
+    private fun resetPagination() {
+        currentOffset = 0
+        isLastPage = false
+        isPaginationLoading = false
     }
 
-    // ... остальной код doPagination и прочее (оставим без изменений логику)
+    // Метод для обновления состояния пагинации
+    private fun updatePaginationState(lastResultSize: Int) {
+        if (lastResultSize < limit) {
+            isLastPage = true
+        }
+    }
+
+    // Метод для обработки пагинации при скролле
     fun doPagination(visibleItemCount: Int, totalItemCount: Int, pastVisibleItemCount: Int) {
-        if (isPaginationLoading || isLastPage) return
-
+        if (isPaginationLoading || isLastPage || currentQuery != null) return
         if ((visibleItemCount + pastVisibleItemCount) >= totalItemCount - 5) {
             loadNextPage()
         }
     }
 
+    // Метод для загрузки следующей страницы результатов
     private fun loadNextPage() {
         isPaginationLoading = true
         currentOffset += limit
-        
         viewModelScope.launch {
             try {
-                val response = if (currentQuery != null) {
-                    RetrofitClient.jamendoService.searchTracks(query = currentQuery!!, offset = currentOffset)
-                } else {
-                    RetrofitClient.jamendoService.getTracksByCategory(tag = currentTag!!, offset = currentOffset)
-                }
-                
-                val domainTracks = response.results
-                _tracks.value = (_tracks.value ?: emptyList()) + domainTracks
-                
-                if (currentTag != null) {
-                    trackDao.upsertCacheTracks(domainTracks.map { mapToEntity(it, currentTag!!) })
-                }
-                
+                val response = RetrofitClient.jamendoService.getTracksByCategory(tag = currentTag ?: "", offset = currentOffset)
+                val domainTracks = response.results ?: emptyList()
+                val currentList = _tracks.value ?: emptyList()
+                _tracks.value = currentList + domainTracks
                 updatePaginationState(domainTracks.size)
             } catch (e: Exception) {
                 currentOffset -= limit
@@ -147,39 +152,11 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
-
-    fun searchTracks(query: String) {
-        if (query.isBlank()) {
-            loadLastCategoryTracks()
-            return
-        }
-        resetPagination()
-        currentQuery = query
-        currentTag = null
-        
-        viewModelScope.launch {
-            _isLoading.value = true
-            try {
-                val response = RetrofitClient.jamendoService.searchTracks(query = query, offset = currentOffset)
-                _tracks.value = response.results
-                updatePaginationState(response.results.size)
-            } catch (e: Exception) {
-                // Для поиска кэш обычно не делают, так как запросы уникальны
-            } finally {
-                _isLoading.value = false
-            }
-        }
-    }
-
-    private fun resetPagination() {
-        currentOffset = 0
-        isLastPage = false
-        isPaginationLoading = false
-    }
-
-    private fun updatePaginationState(lastResultSize: Int) {
-        if (lastResultSize < limit) {
-            isLastPage = true
-        }
-    }
+    
+    // Метод для преобразования сущности БД в доменную модель
+    private fun mapToDomain(entity: TrackEntity) = Track(
+        id = entity.id, name = entity.name, artistName = entity.artistName,
+        albumName = entity.albumName, imageUrl = entity.imageUrl,
+        audioUrl = entity.audioUrl, duration = entity.duration
+    )
 }

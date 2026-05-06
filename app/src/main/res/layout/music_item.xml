@@ -72,14 +72,58 @@
             app:layout_constraintTop_toBottomOf="@id/artist"
             tools:text="Album Name" />
 
-         <ImageView
-            android:id="@+id/favorite_icon"
+        <TextView
+            android:id="@+id/duration"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="4dp"
+            android:textSize="12sp"
+            android:textColor="@android:color/darker_gray"
+            app:layout_constraintStart_toEndOf="@id/poster"
+            app:layout_constraintTop_toBottomOf="@id/album"
+            tools:text="3:45" />
+
+         <ImageView
+            android:id="@+id/local_indicator_icon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_margin="4dp"
+            android:background="@drawable/bg_circle_translucent"
+            android:backgroundTint="#80000000"
+            android:padding="4dp"
+            android:visibility="gone"
+            app:layout_constraintStart_toStartOf="@+id/poster"
+            app:layout_constraintTop_toTopOf="@+id/poster"
+            app:srcCompat="@drawable/ic_lyrics"
+            app:tint="@android:color/white"
+            tools:visibility="visible" />
+
+        <ImageView
+            android:id="@+id/delete_icon"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
             android:layout_margin="8dp"
+            android:padding="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Delete"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:srcCompat="@android:drawable/ic_menu_delete"
+            app:tint="#FF0000"
+            tools:visibility="visible" />
+
+         <ImageView
+            android:id="@+id/favorite_icon"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_margin="8dp"
+            android:padding="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:elevation="11dp"
             android:contentDescription="@string/favorite_icon_content_description"
-            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintBottom_toTopOf="@+id/delete_icon"
             app:layout_constraintEnd_toEndOf="parent"
             app:srcCompat="@drawable/ic_star_border"
             app:tint="@color/colorPrimaryDark" />

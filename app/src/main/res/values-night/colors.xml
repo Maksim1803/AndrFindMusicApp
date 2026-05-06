@@ -5,6 +5,11 @@
     <color name="gradient_bottom">#0035A0</color>
 
     <color name="item_background">#001849</color>
+    <color name="item_playing_background">#4285F4</color>
     <color name="search_background">#001849</color>
     <color name="search_stroke">#002878</color>
+
+    <color name="timer_dialog_bg">#004B6E</color>
+    <color name="timer_dialog_text">#FFFFFF</color>
+    <color name="player_icon_tint">#8AB4F8</color>
 </resources>

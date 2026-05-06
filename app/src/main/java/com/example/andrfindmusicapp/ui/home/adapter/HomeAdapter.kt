@@ -6,11 +6,13 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.MusicItemBinding
+import com.example.andrfindmusicapp.utils.TimeUtils
 
 // Класс для адаптера списка треков на главном экране
 class HomeAdapter(
     private val onItemClick: (Track) -> Unit,
-    private val onFavoriteClick: (Track) -> Unit
+    private val onFavoriteClick: (Track) -> Unit,
+    private val onDeleteClick: ((Track) -> Unit)? = null
 ) : RecyclerView.Adapter<HomeAdapter.ViewHolder>() {
 
     private var tracks: List<Track> = emptyList()
@@ -44,6 +46,7 @@ class HomeAdapter(
             title.text = track.name
             artist.text = track.artistName
             album.text = track.albumName
+            duration.text = TimeUtils.formatSeconds(track.duration ?: 0)
             poster.load(track.imageUrl) {
                 crossfade(true)
                 placeholder(android.R.drawable.ic_menu_gallery)
@@ -56,6 +59,19 @@ class HomeAdapter(
             )
 
             favoriteIcon.setOnClickListener { onFavoriteClick(track) }
+            
+            // Если передан колбэк для удаления, показываем иконку корзины
+            if (onDeleteClick != null) {
+                deleteIcon.visibility = android.view.View.VISIBLE
+                deleteIcon.setOnClickListener { onDeleteClick.invoke(track) }
+            } else {
+                deleteIcon.visibility = android.view.View.GONE
+            }
+
+            // Показываем индикатор локального файла (дискету) на постере
+            val isLocal = track.audioUrl?.startsWith("content://") == true || track.audioUrl?.startsWith("file://") == true
+            localIndicatorIcon.visibility = if (isLocal) android.view.View.VISIBLE else android.view.View.GONE
+
             root.setOnClickListener { onItemClick(track) }
         }
     }
