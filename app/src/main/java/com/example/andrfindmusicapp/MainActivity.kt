@@ -1,17 +1,19 @@
 package com.example.andrfindmusicapp
 
 import android.os.Bundle
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.navigation.findNavController
 import androidx.navigation.ui.setupWithNavController
 import com.example.andrfindmusicapp.databinding.ActivityMainBinding
-
+import com.example.andrfindmusicapp.ui.main.MainViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 // Класс для главной активности приложения, управляющей навигацией и общей темой
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
+    private val mainViewModel: MainViewModel by viewModels()
 
     // Метод для инициализации активности и настройки BottomNavigationView
     override fun onCreate(savedInstanceState: Bundle?) {

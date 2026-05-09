@@ -17,4 +17,5 @@
     <string name="category_pop">Pop Music</string>
     <string name="category_electronic">Electronic</string>
     <string name="category_classical">Classical</string>
+    <string name="playlist_hint">Add some tracks to favorites to create a playlist</string>
 </resources>

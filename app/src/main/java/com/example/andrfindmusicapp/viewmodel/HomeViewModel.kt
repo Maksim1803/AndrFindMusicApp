@@ -8,7 +8,11 @@ import com.example.andrfindmusicapp.data.local.TrackEntity
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.data.remote.RetrofitClient
 import com.example.andrfindmusicapp.utils.PreferenceProvider
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -26,12 +30,16 @@ class HomeViewModel @Inject constructor(
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> get() = _isLoading
 
+    // Список для локальной фильтрации (как в FindAFilm)
+    private var allTracksCached = listOf<Track>()
+
     private var currentOffset = 0
     private val limit = 20
     private var isPaginationLoading = false
     private var isLastPage = false
     private var currentQuery: String? = null
     private var currentTag: String? = null
+    private var searchJob: Job? = null
 
     init {
         loadLastCategoryTracks()
@@ -54,7 +62,9 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             trackDao.getTracksByCategory(category).collect { entities ->
                 if (entities.isNotEmpty() && _tracks.value.isNullOrEmpty()) {
-                    _tracks.value = entities.map { mapToDomain(it) }
+                    val domainTracks = entities.map { mapToDomain(it) }
+                    allTracksCached = domainTracks
+                    _tracks.value = domainTracks
                 }
             }
         }
@@ -65,13 +75,15 @@ class HomeViewModel @Inject constructor(
             _isLoading.value = true
             try {
                 val response = RetrofitClient.jamendoService.getTracksByCategory(tag = tag, offset = currentOffset)
-                val domainTracks = response.results
+                val domainTracks = response.results ?: emptyList()
                 
                 if (currentOffset == 0) {
                     trackDao.clearCacheByCategory(tag)
+                    allTracksCached = domainTracks
                     _tracks.value = domainTracks
                 } else {
-                    _tracks.value = (_tracks.value ?: emptyList()) + domainTracks
+                    val currentList = _tracks.value ?: emptyList()
+                    _tracks.value = currentList + domainTracks
                 }
                 
                 // Сохраняем в кэш
@@ -149,22 +161,43 @@ class HomeViewModel @Inject constructor(
     }
 
     fun searchTracks(query: String) {
-        if (query.isBlank()) {
-            loadLastCategoryTracks()
+        searchJob?.cancel()
+        
+        if (query.isEmpty()) {
+            _tracks.value = allTracksCached
             return
         }
-        resetPagination()
-        currentQuery = query
-        currentTag = null
+
+        // 1. Сначала делаем мгновенную локальную фильтрацию
+        val lowerQuery = query.lowercase(Locale.getDefault())
+        val localResult = allTracksCached.filter {
+            val nameMatch = it.name?.lowercase(Locale.getDefault())?.contains(lowerQuery) == true
+            val artistMatch = it.artistName?.lowercase(Locale.getDefault())?.contains(lowerQuery) == true
+            nameMatch || artistMatch
+        }
         
-        viewModelScope.launch {
+        // Сразу обновляем UI локальными данными
+        _tracks.value = localResult
+
+        // 2. Затем пробуем найти новые треки в сети с небольшой задержкой
+        searchJob = viewModelScope.launch {
+            delay(700)
+            resetPagination()
+            currentQuery = query
+            currentTag = null
             _isLoading.value = true
             try {
                 val response = RetrofitClient.jamendoService.searchTracks(query = query, offset = currentOffset)
-                _tracks.value = response.results
-                updatePaginationState(response.results.size)
+                val networkResults = response.results ?: emptyList()
+                
+                if (networkResults.isNotEmpty()) {
+                    // Объединяем результаты, убирая дубликаты по ID
+                    val combined = (localResult + networkResults).distinctBy { it.id }
+                    _tracks.value = combined
+                    updatePaginationState(networkResults.size)
+                }
             } catch (e: Exception) {
-                // Для поиска кэш обычно не делают, так как запросы уникальны
+                // Если сеть упала, у нас все еще есть локальные результаты
             } finally {
                 _isLoading.value = false
             }

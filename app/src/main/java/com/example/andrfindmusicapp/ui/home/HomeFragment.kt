@@ -18,6 +18,7 @@ import com.example.andrfindmusicapp.data.local.TrackEntity
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.FragmentHomeBinding
 import com.example.andrfindmusicapp.ui.home.adapter.HomeAdapter
+import com.example.andrfindmusicapp.ui.main.MainViewModel
 import com.example.andrfindmusicapp.ui.player.PlayerViewModel
 import com.example.andrfindmusicapp.utils.PreferenceProvider
 import com.example.andrfindmusicapp.viewmodel.HomeViewModel
@@ -33,7 +34,7 @@ class HomeFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val viewModel: HomeViewModel by viewModels()
-    private val playerViewModel: PlayerViewModel by activityViewModels()
+    private val mainViewModel: MainViewModel by activityViewModels()
     private lateinit var adapter: HomeAdapter
 
     @javax.inject.Inject
@@ -56,7 +57,6 @@ class HomeFragment : Fragment() {
         setupRecyclerView()
         setupSearchView()
         observeViewModel()
-        refreshFavorites()
 
         binding.settingsMenu.setOnClickListener { view ->
             showSettingsMenu(view)
@@ -99,39 +99,28 @@ class HomeFragment : Fragment() {
 
     // Метод для переключения языка интерфейса (RU/EN)
     private fun toggleLanguage() {
-        val currentLang = resources.configuration.locales[0].language
+        // Получаем текущий язык через AppCompat (он вернет системный, если выбор еще не сделан)
+        val currentLocale = androidx.appcompat.app.AppCompatDelegate.getApplicationLocales()[0]
+        val currentLang = currentLocale?.language ?: java.util.Locale.getDefault().language
+        
         val newLang = if (currentLang == "ru") "en" else "ru"
         
-        val locale = java.util.Locale(newLang)
-        java.util.Locale.setDefault(locale)
+        // Используем современный способ переключения (работает на всех версиях Android)
+        val appLocale: androidx.core.os.LocaleListCompat = androidx.core.os.LocaleListCompat.forLanguageTags(newLang)
+        androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(appLocale)
         
-        val resources = requireContext().resources
-        val config = resources.configuration
-        config.setLocale(locale)
-        
-        // Для Android 13+ (API 33) и выше используем специальный API
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            requireActivity().getSystemService(android.app.LocaleManager::class.java)
-                .applicationLocales = android.os.LocaleList(locale)
-        } else {
-            // Для старых версий
-            context?.createConfigurationContext(config)
-            resources.updateConfiguration(config, resources.displayMetrics)
-        }
-        
-        activity?.recreate()
+        // AppCompatDelegate сам вызовет recreate() при необходимости
     }
 
     // Метод для настройки RecyclerView и его адаптера
     private fun setupRecyclerView() {
         adapter = HomeAdapter(
             onItemClick = { track ->
-                playerViewModel.selectTrack(track)
-                val bundle = Bundle().apply { putSerializable("track", track) }
-                findNavController().navigate(R.id.navigation_player, bundle)
+                mainViewModel.playTrackWithPlaylist(track, viewModel.tracks.value ?: emptyList())
+                findNavController().navigate(R.id.navigation_player)
             },
             onFavoriteClick = { track ->
-                toggleFavorite(track)
+                mainViewModel.toggleFavorite(track)
             }
         )
         binding.mainRecycler.adapter = adapter
@@ -151,55 +140,23 @@ class HomeFragment : Fragment() {
         })
     }
 
-    // Метод для добавления или удаления трека из списка избранного
-    private fun toggleFavorite(track: Track) {
-        val database = AppDatabase.getDatabase(requireContext())
-        viewLifecycleOwner.lifecycleScope.launch {
-            val dao = database.trackDao()
-            val isCurrentlyFav = dao.isFavorite(track.id)
-            val newFavStatus = !isCurrentlyFav
-
-            // Пробуем обновить статус, если трек уже есть в базе
-            dao.updateFavoriteStatus(track.id, newFavStatus)
-            
-            // Если трека не было (он пришел из поиска и мы его еще не кэшировали) - вставляем
-            if (!dao.isFavorite(track.id) && !isCurrentlyFav) {
-                val entity = TrackEntity(
-                    id = track.id,
-                    name = track.name,
-                    duration = track.duration,
-                    artistName = track.artistName,
-                    albumName = track.albumName,
-                    imageUrl = track.imageUrl,
-                    audioUrl = track.audioUrl,
-                    isFavorite = true,
-                    category = "" 
-                )
-                dao.insertTrack(entity)
-            }
-        }
-    }
-
-    // Метод для обновления статуса "избранное" в адаптере
-    private fun refreshFavorites() {
-        val database = AppDatabase.getDatabase(requireContext())
-        viewLifecycleOwner.lifecycleScope.launch {
-            database.trackDao().getAllFavorites().collectLatest { favorites ->
-                val favoriteIds = favorites.map { it.id }.toSet()
-                adapter.updateFavorites(favoriteIds)
-            }
-        }
-    }
-
     // Метод для настройки поисковой строки
     private fun setupSearchView() {
         binding.searchViewHome.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            // Отрабатывает при нажатии кнопки "поиск" на клавиатуре
             override fun onQueryTextSubmit(query: String?): Boolean {
                 viewModel.searchTracks(query ?: "")
                 return true
             }
+            // Отрабатывает на каждое изменение текста (реактивный поиск)
             override fun onQueryTextChange(newText: String?): Boolean {
-                if (newText.isNullOrBlank()) viewModel.loadLastCategoryTracks()
+                // Если ввод пуст, возвращаем стандартный список (как в FindAFilm)
+                if (newText.isNullOrBlank()) {
+                    viewModel.loadLastCategoryTracks()
+                } else {
+                    // Иначе запускаем поиск (в ViewModel добавлена задержка и отмена старых запросов)
+                    viewModel.searchTracks(newText)
+                }
                 return true
             }
         })
@@ -213,6 +170,12 @@ class HomeFragment : Fragment() {
         }
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
             binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+        }
+        
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainViewModel.favoriteIds.collectLatest { favIds ->
+                adapter.updateFavorites(favIds)
+            }
         }
     }
 
