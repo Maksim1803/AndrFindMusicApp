@@ -32,6 +32,17 @@ class PlayerFragment : Fragment() {
     // Флаг для предотвращения прыжков SeekBar при перемотке
     private var isUserSeeking = false
 
+    private val requestPermissionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            mainViewModel.currentTrack.value?.let { track ->
+                mainViewModel.downloadTrack(track)
+                android.widget.Toast.makeText(requireContext(), R.string.download_started, android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -62,17 +73,43 @@ class PlayerFragment : Fragment() {
             btnPlayPause.setOnClickListener { mainViewModel.togglePlayPause() }
             
             btnNext.setOnClickListener { 
-                android.widget.Toast.makeText(requireContext(), R.string.playlist_add_hint, android.widget.Toast.LENGTH_SHORT).show()
+                if (mainViewModel.favoriteIds.value.isEmpty()) {
+                    android.widget.Toast.makeText(requireContext(), R.string.playlist_add_hint, android.widget.Toast.LENGTH_SHORT).show()
+                }
                 mainViewModel.skipToNext() 
             }
 
             btnPrev.setOnClickListener { 
-                android.widget.Toast.makeText(requireContext(), R.string.playlist_add_hint, android.widget.Toast.LENGTH_SHORT).show()
+                if (mainViewModel.favoriteIds.value.isEmpty()) {
+                    android.widget.Toast.makeText(requireContext(), R.string.playlist_add_hint, android.widget.Toast.LENGTH_SHORT).show()
+                }
                 mainViewModel.skipToPrevious() 
             }
             
             detailsFavorite.setOnClickListener {
                 mainViewModel.currentTrack.value?.let { mainViewModel.toggleFavorite(it) }
+            }
+
+            btnDownload.setOnClickListener {
+                mainViewModel.currentTrack.value?.let { track ->
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        // На Android 10+ (API 29+) разрешение не требуется для сохранения в Music
+                        mainViewModel.downloadTrack(track)
+                        android.widget.Toast.makeText(requireContext(), R.string.download_started, android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        // На старых версиях проверяем разрешение
+                        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                                requireContext(),
+                                android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        ) {
+                            mainViewModel.downloadTrack(track)
+                            android.widget.Toast.makeText(requireContext(), R.string.download_started, android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            requestPermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                        }
+                    }
+                }
             }
 
             seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -88,11 +125,22 @@ class PlayerFragment : Fragment() {
     }
 
     private fun observeViewModel() {
+        // Объединяем наблюдение за текущим треком и списком избранного
         viewLifecycleOwner.lifecycleScope.launch {
-            mainViewModel.currentTrack.collectLatest { track ->
+            kotlinx.coroutines.flow.combine(
+                mainViewModel.currentTrack,
+                mainViewModel.favoriteIds
+            ) { track, favoriteIds ->
+                track to favoriteIds
+            }.collectLatest { (track, favoriteIds) ->
                 track?.let { 
                     setupUI(it)
                     playlistAdapter.setCurrentTrack(it.id)
+                    
+                    val isFavorite = favoriteIds.contains(it.id)
+                    binding.detailsFavorite.setImageResource(
+                        if (isFavorite) R.drawable.ic_star else R.drawable.ic_star_border
+                    )
                 }
             }
         }
@@ -104,10 +152,9 @@ class PlayerFragment : Fragment() {
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            mainViewModel.favoriteIds.collectLatest { favoriteIds ->
-                val isFavorite = favoriteIds.contains(mainViewModel.currentTrack.value?.id)
-                binding.detailsFavorite.setImageResource(
-                    if (isFavorite) R.drawable.ic_star else R.drawable.ic_star_border
+            mainViewModel.isPlaying.collectLatest { isPlaying ->
+                binding.btnPlayPause.setImageResource(
+                    if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
                 )
             }
         }
@@ -120,6 +167,10 @@ class PlayerFragment : Fragment() {
             crossfade(true)
             placeholder(R.drawable.ic_launcher_background)
         }
+        
+        // Показываем индикатор только для локальных треков
+        val isLocal = track.audioUrl?.startsWith("content://") == true || track.audioUrl?.startsWith("file://") == true
+        binding.btnLyrics.visibility = if (isLocal) View.VISIBLE else View.GONE
         
         // Обновляем максимальное значение SeekBar при смене трека
         binding.seekBar.max = (track.duration ?: 0) * 1000 // Jamendo дает в секундах

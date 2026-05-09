@@ -64,7 +64,7 @@ class FavoritesFragment : Fragment() {
         // Подгружаем актуальный список избранного из БД
         viewLifecycleOwner.lifecycleScope.launch {
             trackDao.getAllFavorites().collectLatest { entities ->
-                favoriteTracks = entities.map { entity ->
+                val allFavs = entities.map { entity ->
                     Track(
                         id = entity.id,
                         name = entity.name,
@@ -74,6 +74,10 @@ class FavoritesFragment : Fragment() {
                         imageUrl = entity.imageUrl,
                         duration = entity.duration
                     )
+                }
+                // ФИЛЬТР: Оставляем в списке Избранное только онлайн-треки
+                favoriteTracks = allFavs.filter { 
+                    it.audioUrl?.startsWith("http") == true
                 }
                 adapter.updateData(favoriteTracks)
             }

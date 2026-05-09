@@ -28,7 +28,8 @@ import javax.inject.Inject
 class MainViewModel @Inject constructor(
     @ApplicationContext context: Context,
     private val trackDao: TrackDao,
-    val sleepTimerManager: SleepTimerManager
+    val sleepTimerManager: SleepTimerManager,
+    private val downloadManager: com.example.andrfindmusicapp.utils.TrackDownloadManager
 ) : ViewModel() {
 
     private val _currentTrack = MutableStateFlow<Track?>(null)
@@ -91,22 +92,36 @@ class MainViewModel @Inject constructor(
     }
 
     fun playTrackWithPlaylist(track: Track, newPlaylist: List<Track>) {
-        val tracksToPlay = if (newPlaylist.isEmpty()) listOf(track) else newPlaylist
+        // Применяем приоритет: Избранное -> Скачанные -> Остальные
+        val sortedPlaylist = newPlaylist.sortedWith(compareByDescending<Track> { 
+            _favoriteIds.value.contains(it.id) 
+        }.thenByDescending { 
+            downloadManager.getDownloadedUri(it) != null 
+        })
+
+        val tracksToPlay = if (sortedPlaylist.isEmpty()) listOf(track) else sortedPlaylist
         
-        if (_playlist.value != tracksToPlay) {
-            _playlist.value = tracksToPlay
-            val mediaItems = tracksToPlay.map { createMediaItem(it) }
+        // Подменяем сетевые ссылки на локальные, если файлы скачаны
+        val preparedTracks = tracksToPlay.map { t ->
+            val localUri = downloadManager.getDownloadedUri(t)
+            if (localUri != null) t.copy(audioUrl = localUri.toString()) else t
+        }
+
+        if (_playlist.value != preparedTracks) {
+            _playlist.value = preparedTracks
+            val mediaItems = preparedTracks.map { createMediaItem(it) }
             controller?.setMediaItems(mediaItems)
         }
 
-        val index = _playlist.value.indexOfFirst { it.id == track.id }
+        val index = preparedTracks.indexOfFirst { it.id == track.id }
         if (index != -1) {
             controller?.seekTo(index, 0)
         }
 
         controller?.prepare()
         controller?.play()
-        _currentTrack.value = track
+        controller?.repeatMode = androidx.media3.common.Player.REPEAT_MODE_ALL
+        _currentTrack.value = preparedTracks.find { it.id == track.id } ?: track
     }
 
     fun toggleFavorite(track: Track) {
@@ -163,6 +178,14 @@ class MainViewModel @Inject constructor(
 
     fun stopSleepTimer() {
         sleepTimerManager.stopTimer()
+    }
+
+    fun downloadTrack(track: Track) {
+        downloadManager.downloadTrack(track)
+    }
+
+    fun deleteTrack(track: Track): Boolean {
+        return downloadManager.deleteTrackFile(track)
     }
 
     fun getController(): Player? = controller

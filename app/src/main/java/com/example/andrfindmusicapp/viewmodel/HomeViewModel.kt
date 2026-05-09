@@ -100,12 +100,12 @@ class HomeViewModel @Inject constructor(
     private fun mapToEntity(track: Track, category: String): TrackEntity {
         return TrackEntity(
             id = track.id,
-            name = track.name,
-            artistName = track.artistName,
-            albumName = track.albumName,
-            imageUrl = track.imageUrl,
-            audioUrl = track.audioUrl,
-            duration = track.duration,
+            name = track.name ?: "",
+            artistName = track.artistName ?: "",
+            albumName = track.albumName ?: "",
+            imageUrl = track.imageUrl ?: "",
+            audioUrl = track.audioUrl ?: "",
+            duration = track.duration ?: 0,
             category = category,
             isFavorite = false // При кэшировании не сбрасываем существующий флаг (OnConflict.REPLACE обработает это, если мы не передадим старое значение, но в нашей схеме лучше аккуратно)
         )
@@ -144,7 +144,7 @@ class HomeViewModel @Inject constructor(
                     RetrofitClient.jamendoService.getTracksByCategory(tag = currentTag!!, offset = currentOffset)
                 }
                 
-                val domainTracks = response.results
+                val domainTracks = response.results ?: emptyList()
                 _tracks.value = (_tracks.value ?: emptyList()) + domainTracks
                 
                 if (currentTag != null) {
