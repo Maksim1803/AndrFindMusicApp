@@ -13,6 +13,8 @@ import com.example.andrfindmusicapp.R
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.FragmentPlayerBinding
 import com.example.andrfindmusicapp.ui.main.MainViewModel
+import com.example.andrfindmusicapp.ui.player.adapter.PlaylistAdapter
+import com.example.andrfindmusicapp.utils.TimeUtils
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -25,6 +27,7 @@ class PlayerFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val mainViewModel: MainViewModel by activityViewModels()
+    private lateinit var playlistAdapter: PlaylistAdapter
     
     // Флаг для предотвращения прыжков SeekBar при перемотке
     private var isUserSeeking = false
@@ -41,9 +44,17 @@ class PlayerFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        setupRecyclerView()
         setupListeners()
         observeViewModel()
         startSeekBarUpdate()
+    }
+
+    private fun setupRecyclerView() {
+        playlistAdapter = PlaylistAdapter { track ->
+            mainViewModel.playTrackWithPlaylist(track, mainViewModel.playlist.value)
+        }
+        binding.rvSmallPlaylist.adapter = playlistAdapter
     }
 
     private fun setupListeners() {
@@ -79,15 +90,16 @@ class PlayerFragment : Fragment() {
     private fun observeViewModel() {
         viewLifecycleOwner.lifecycleScope.launch {
             mainViewModel.currentTrack.collectLatest { track ->
-                track?.let { setupUI(it) }
+                track?.let { 
+                    setupUI(it)
+                    playlistAdapter.setCurrentTrack(it.id)
+                }
             }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            mainViewModel.isPlaying.collectLatest { isPlaying ->
-                binding.btnPlayPause.setImageResource(
-                    if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
-                )
+            mainViewModel.playlist.collectLatest { tracks ->
+                playlistAdapter.updateData(tracks)
             }
         }
 
@@ -120,9 +132,11 @@ class PlayerFragment : Fragment() {
                     val controller = mainViewModel.getController()
                     controller?.let {
                         binding.seekBar.progress = it.currentPosition.toInt()
-                        // Если длительность в MediaItem не совпадает с API, обновляем max
+                        binding.tvCurrentTime.text = TimeUtils.formatMillis(it.currentPosition)
+                        
                         if (it.duration > 0) {
                             binding.seekBar.max = it.duration.toInt()
+                            binding.tvTotalTime.text = TimeUtils.formatMillis(it.duration)
                         }
                     }
                 }
