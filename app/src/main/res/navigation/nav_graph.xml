@@ -39,4 +39,14 @@
         android:name="com.example.andrfindmusicapp.ui.local.LocalTracksFragment"
         android:label="@string/local_tracks_tab"
         tools:layout="@layout/fragment_local_tracks" />
+
+    <fragment
+        android:id="@+id/navigation_recommendation"
+        android:name="com.example.andrfindmusicapp.ui.recommendation.RecommendationFragment"
+        android:label="Рекомендация"
+        tools:layout="@layout/fragment_recommendation">
+        <argument
+            android:name="track"
+            app:argType="com.example.andrfindmusicapp.data.model.Track" />
+    </fragment>
 </navigation>

@@ -5,14 +5,14 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
-import com.example.andrfindmusicapp.R
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.ItemSmallTrackBinding
 import com.example.andrfindmusicapp.utils.TimeUtils
 
 // Адаптер для отображения очереди воспроизведения в плеере
 class PlaylistAdapter(
-    private val onItemClick: (Track) -> Unit
+    private val onItemClick: (Track) -> Unit,
+    private val onDeleteClick: (Track) -> Unit
 ) : RecyclerView.Adapter<PlaylistAdapter.ViewHolder>() {
 
     private var tracks: List<Track> = emptyList()
@@ -42,18 +42,17 @@ class PlaylistAdapter(
             smallArtist.text = track.artistName
             smallDuration.text = TimeUtils.formatSeconds(track.duration ?: 0)
             
-            // Загружаем картинку. Если её нет - покажем "человечка" (placeholder)
             smallPoster.load(track.imageUrl) {
                 crossfade(true)
                 placeholder(android.R.drawable.ic_menu_gallery)
                 error(android.R.drawable.ic_menu_report_image)
             }
 
-            // Выделяем текущий играющий трек
             val isPlaying = track.id == currentTrackId
             icPlaying.visibility = if (isPlaying) View.VISIBLE else View.GONE
-            smallItemContainer.alpha = if (isPlaying) 1.0f else 0.7f
+            smallItemContainer.alpha = if (isPlaying) 1.0f else 0.8f
             
+            smallDeleteIcon.setOnClickListener { onDeleteClick(track) }
             root.setOnClickListener { onItemClick(track) }
         }
     }

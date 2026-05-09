@@ -20,6 +20,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 // Класс для фрагмента плеера, отвечающего за отображение текущего трека и управление воспроизведением
 @AndroidEntryPoint
@@ -63,9 +64,14 @@ class PlayerFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        playlistAdapter = PlaylistAdapter { track ->
-            mainViewModel.playTrackWithPlaylist(track, mainViewModel.playlist.value)
-        }
+        playlistAdapter = PlaylistAdapter(
+            onItemClick = { track ->
+                mainViewModel.playTrackWithPlaylist(track, mainViewModel.playlist.value)
+            },
+            onDeleteClick = { track ->
+                mainViewModel.removeFromPlaylist(track)
+            }
+        )
         binding.rvSmallPlaylist.adapter = playlistAdapter
     }
 
@@ -91,12 +97,21 @@ class PlayerFragment : Fragment() {
                 mainViewModel.currentTrack.value?.let { mainViewModel.toggleFavorite(it) }
             }
 
+            btnReminder.setOnClickListener {
+                mainViewModel.currentTrack.value?.let { track ->
+                    showDateTimePicker(track)
+                }
+            }
+
             btnDownload.setOnClickListener {
                 mainViewModel.currentTrack.value?.let { track ->
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                         // На Android 10+ (API 29+) разрешение не требуется для сохранения в Music
-                        mainViewModel.downloadTrack(track)
-                        android.widget.Toast.makeText(requireContext(), R.string.download_started, android.widget.Toast.LENGTH_SHORT).show()
+                        if (mainViewModel.downloadTrack(track)) {
+                            android.widget.Toast.makeText(requireContext(), R.string.download_started, android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            android.widget.Toast.makeText(requireContext(), R.string.download_already_exists, android.widget.Toast.LENGTH_SHORT).show()
+                        }
                     } else {
                         // На старых версиях проверяем разрешение
                         if (androidx.core.content.ContextCompat.checkSelfPermission(
@@ -104,8 +119,11 @@ class PlayerFragment : Fragment() {
                                 android.Manifest.permission.WRITE_EXTERNAL_STORAGE
                             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
                         ) {
-                            mainViewModel.downloadTrack(track)
-                            android.widget.Toast.makeText(requireContext(), R.string.download_started, android.widget.Toast.LENGTH_SHORT).show()
+                            if (mainViewModel.downloadTrack(track)) {
+                                android.widget.Toast.makeText(requireContext(), R.string.download_started, android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                android.widget.Toast.makeText(requireContext(), R.string.download_already_exists, android.widget.Toast.LENGTH_SHORT).show()
+                            }
                         } else {
                             requestPermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
                         }
@@ -136,14 +154,15 @@ class PlayerFragment : Fragment() {
     }
 
     private fun observeViewModel() {
-        // Объединяем наблюдение за текущим треком и списком избранного
+        // Объединяем наблюдение за текущим треком, избранным и напоминаниями
         viewLifecycleOwner.lifecycleScope.launch {
             kotlinx.coroutines.flow.combine(
                 mainViewModel.currentTrack,
-                mainViewModel.favoriteIds
-            ) { track, favoriteIds ->
-                track to favoriteIds
-            }.collectLatest { (track, favoriteIds) ->
+                mainViewModel.favoriteIds,
+                mainViewModel.reminderIds
+            ) { track, favoriteIds, reminderIds ->
+                Triple(track, favoriteIds, reminderIds)
+            }.collectLatest { (track, favoriteIds, reminderIds) ->
                 track?.let { 
                     setupUI(it)
                     playlistAdapter.setCurrentTrack(it.id)
@@ -151,6 +170,11 @@ class PlayerFragment : Fragment() {
                     val isFavorite = favoriteIds.contains(it.id)
                     binding.detailsFavorite.setImageResource(
                         if (isFavorite) R.drawable.ic_star else R.drawable.ic_star_border
+                    )
+
+                    val hasReminder = reminderIds.contains(it.id)
+                    binding.btnReminder.setImageResource(
+                        if (hasReminder) R.drawable.ic_notifications_active else R.drawable.ic_notifications_none
                     )
                 }
             }
@@ -196,6 +220,48 @@ class PlayerFragment : Fragment() {
         startActivity(android.content.Intent.createChooser(shareIntent, getString(R.string.share_content_description)))
     }
 
+    private fun showDateTimePicker(track: Track) {
+        val calendar = Calendar.getInstance()
+        val datePicker = android.app.DatePickerDialog(
+            requireContext(),
+            { _, year, month, dayOfMonth ->
+                calendar.set(Calendar.YEAR, year)
+                calendar.set(Calendar.MONTH, month)
+                calendar.set(Calendar.DAY_OF_MONTH, dayOfMonth)
+
+                android.app.TimePickerDialog(
+                    requireContext(),
+                    { _, hourOfDay, minute ->
+                        calendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
+                        calendar.set(Calendar.MINUTE, minute)
+                        calendar.set(Calendar.SECOND, 0)
+
+                        if (calendar.timeInMillis <= System.currentTimeMillis()) {
+                            android.widget.Toast.makeText(requireContext(), "Выберите время в будущем", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            mainViewModel.setReminder(track, true)
+                            val dateStr = android.text.format.DateFormat.getDateFormat(requireContext()).format(calendar.time)
+                            val timeStr = android.text.format.DateFormat.getTimeFormat(requireContext()).format(calendar.time)
+                            android.widget.Toast.makeText(requireContext(), getString(R.string.reminder_set, "$dateStr $timeStr"), android.widget.Toast.LENGTH_SHORT).show()
+                            
+                            // Schedule the notification as a reminder
+                            binding.root.postDelayed({
+                                com.example.andrfindmusicapp.utils.NotificationHelper.showRecommendationNotification(requireContext(), track, isReminder = true)
+                            }, calendar.timeInMillis - System.currentTimeMillis())
+                        }
+                    },
+                    calendar.get(Calendar.HOUR_OF_DAY),
+                    calendar.get(Calendar.MINUTE),
+                    true
+                ).show()
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        )
+        datePicker.show()
+    }
+
     private fun showSleepTimerDialog() {
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_sleep_timer, null)
         val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
@@ -206,9 +272,9 @@ class PlayerFragment : Fragment() {
 
         val isDarkTheme = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
         
-        val bgColor = if (isDarkTheme) R.color.dark_gradient_top else R.color.timer_dialog_bg
-        val textColor = if (isDarkTheme) R.color.dark_gradient_middle else R.color.timer_dialog_text
-        val btnColor = if (isDarkTheme) R.color.dark_gradient_bottom else R.color.player_icon_tint
+        val bgColor = if (isDarkTheme) R.color.dark_gradient_bottom else R.color.timer_dialog_bg
+        val textColor = if (isDarkTheme) R.color.timer_dialog_bg else R.color.timer_dialog_text
+        val btnColor = if (isDarkTheme) R.color.colorAccent else R.color.player_icon_tint
 
         // Применяем цвета к фону диалога
         val background = dialogView.background as android.graphics.drawable.GradientDrawable

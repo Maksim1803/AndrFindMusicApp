@@ -12,24 +12,22 @@ import com.example.andrfindmusicapp.data.local.TrackDao
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.service.PlaybackService
 import com.example.andrfindmusicapp.service.SleepTimerManager
+import com.example.andrfindmusicapp.utils.PreferenceProvider
+import com.example.andrfindmusicapp.utils.TrackDownloadManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// Класс для управления основным состоянием приложения и взаимодействия с медиа-контроллером
 @HiltViewModel
 class MainViewModel @Inject constructor(
     @ApplicationContext context: Context,
     private val trackDao: TrackDao,
     val sleepTimerManager: SleepTimerManager,
-    private val downloadManager: com.example.andrfindmusicapp.utils.TrackDownloadManager
+    private val downloadManager: TrackDownloadManager,
+    private val preferenceProvider: PreferenceProvider
 ) : ViewModel() {
 
     private val _currentTrack = MutableStateFlow<Track?>(null)
@@ -44,7 +42,14 @@ class MainViewModel @Inject constructor(
     private val _favoriteIds = MutableStateFlow<Set<String>>(emptySet())
     val favoriteIds = _favoriteIds.asStateFlow()
 
+    private val _reminderIds = MutableStateFlow<Set<String>>(emptySet())
+    val reminderIds = _reminderIds.asStateFlow()
+
+    private val _recommendedTrack = MutableStateFlow<Track?>(null)
+    val recommendedTrack = _recommendedTrack.asStateFlow()
+
     private var controller: MediaController? = null
+    private val _isControllerReady = MutableStateFlow(false)
 
     init {
         viewModelScope.launch {
@@ -62,12 +67,32 @@ class MainViewModel @Inject constructor(
                         mediaItem?.mediaId?.let { id ->
                             val track = _playlist.value.find { it.id == id }
                             _currentTrack.value = track
+                            preferenceProvider.saveLastState(track, _playlist.value)
                         }
                     }
                 }
             })
 
-            // Автоматически подгружаем список избранных ID для UI
+            // Восстанавливаем последнее состояние если плеер пуст
+            val lastPlaylist = preferenceProvider.getLastPlaylist()
+            if (lastPlaylist.isNotEmpty() && _playlist.value.isEmpty()) {
+                _playlist.value = lastPlaylist
+                val mediaItems = lastPlaylist.map { createMediaItem(it) }
+                controller?.setMediaItems(mediaItems)
+                
+                preferenceProvider.getLastTrack()?.let { lastTrack ->
+                    val index = lastPlaylist.indexOfFirst { it.id == lastTrack.id }
+                    if (index != -1) {
+                        controller?.seekTo(index, 0)
+                        _currentTrack.value = lastTrack
+                    }
+                }
+                controller?.prepare()
+            }
+
+            _isControllerReady.value = true
+
+            // Подгружаем избранное
             trackDao.getAllFavorites()
                 .map { entities -> entities.map { it.id }.toSet() }
                 .distinctUntilChanged()
@@ -85,53 +110,51 @@ class MainViewModel @Inject constructor(
                 androidx.media3.common.MediaMetadata.Builder()
                     .setTitle(track.name ?: "Unknown")
                     .setArtist(track.artistName ?: "Unknown Artist")
-                    .setArtworkUri(if (track.imageUrl != null) android.net.Uri.parse(track.imageUrl) else null)
+                    .setArtworkUri(if (!track.imageUrl.isNullOrEmpty()) android.net.Uri.parse(track.imageUrl) else null)
                     .build()
             )
             .build()
     }
 
     fun playTrackWithPlaylist(track: Track, newPlaylist: List<Track>) {
-        // Применяем приоритет: Избранное -> Скачанные -> Остальные
-        val sortedPlaylist = newPlaylist.sortedWith(compareByDescending<Track> { 
-            _favoriteIds.value.contains(it.id) 
-        }.thenByDescending { 
-            downloadManager.getDownloadedUri(it) != null 
-        })
+        viewModelScope.launch {
+            // Ждем готовности контроллера
+            _isControllerReady.first { it }
+            
+            val sortedPlaylist = newPlaylist.sortedWith(compareByDescending<Track> { 
+                _favoriteIds.value.contains(it.id) 
+            }.thenByDescending { 
+                downloadManager.getDownloadedUri(it) != null 
+            })
 
-        val tracksToPlay = if (sortedPlaylist.isEmpty()) listOf(track) else sortedPlaylist
-        
-        // Подменяем сетевые ссылки на локальные, если файлы скачаны
-        val preparedTracks = tracksToPlay.map { t ->
-            val localUri = downloadManager.getDownloadedUri(t)
-            if (localUri != null) t.copy(audioUrl = localUri.toString()) else t
-        }
+            val tracksToPlay = if (sortedPlaylist.isEmpty()) listOf(track) else sortedPlaylist
+            
+            val preparedTracks = tracksToPlay.map { t ->
+                val localUri = downloadManager.getDownloadedUri(t)
+                if (localUri != null) t.copy(audioUrl = localUri.toString()) else t
+            }
 
-        if (_playlist.value != preparedTracks) {
             _playlist.value = preparedTracks
-            val mediaItems = preparedTracks.map { createMediaItem(it) }
-            controller?.setMediaItems(mediaItems)
-        }
+            controller?.setMediaItems(preparedTracks.map { createMediaItem(it) })
 
-        val index = preparedTracks.indexOfFirst { it.id == track.id }
-        if (index != -1) {
-            controller?.seekTo(index, 0)
-        }
+            val index = preparedTracks.indexOfFirst { it.id == track.id }
+            if (index != -1) controller?.seekTo(index, 0)
 
-        controller?.prepare()
-        controller?.play()
-        controller?.repeatMode = androidx.media3.common.Player.REPEAT_MODE_ALL
-        _currentTrack.value = preparedTracks.find { it.id == track.id } ?: track
+            controller?.prepare()
+            controller?.play()
+            controller?.repeatMode = Player.REPEAT_MODE_ALL
+            _currentTrack.value = preparedTracks.find { it.id == track.id } ?: track
+            preferenceProvider.saveLastState(_currentTrack.value, _playlist.value)
+        }
     }
 
     fun toggleFavorite(track: Track) {
         viewModelScope.launch {
             val isCurrentlyFav = trackDao.isFavorite(track.id)
             if (isCurrentlyFav) {
-                // Если уже в избранном - убираем флаг
                 trackDao.updateFavoriteStatus(track.id, false)
+                removeFromPlaylist(track)
             } else {
-                // Если нет в базе - вставляем, если есть - просто обновляем флаг
                 val entity = com.example.andrfindmusicapp.data.local.TrackEntity(
                     id = track.id,
                     name = track.name ?: "Unknown",
@@ -143,51 +166,69 @@ class MainViewModel @Inject constructor(
                     isFavorite = true,
                     category = ""
                 )
-                // Используем insertIgnore, чтобы не затереть существующую категорию в кэше
                 trackDao.insertIgnore(entity)
                 trackDao.updateFavoriteStatus(track.id, true)
+                addToCurrentPlaylist(track)
             }
         }
     }
 
-    fun togglePlayPause() {
-        if (controller?.isPlaying == true) {
-            controller?.pause()
-        } else {
-            controller?.play()
+    private fun addToCurrentPlaylist(track: Track) {
+        val currentList = _playlist.value.toMutableList()
+        if (!currentList.any { it.id == track.id }) {
+            currentList.add(track)
+            _playlist.value = currentList
+            controller?.addMediaItem(createMediaItem(track))
+            preferenceProvider.saveLastState(_currentTrack.value, _playlist.value)
         }
     }
 
-    fun skipToNext() {
-        controller?.seekToNextMediaItem()
+    fun removeFromPlaylist(track: Track) {
+        val currentList = _playlist.value.toMutableList()
+        val index = currentList.indexOfFirst { it.id == track.id }
+        if (index != -1) {
+            currentList.removeAt(index)
+            _playlist.value = currentList
+            controller?.removeMediaItem(index)
+            preferenceProvider.saveLastState(_currentTrack.value, _playlist.value)
+        }
     }
 
-    fun skipToPrevious() {
-        controller?.seekToPreviousMediaItem()
+    fun togglePlayPause() {
+        if (controller?.isPlaying == true) controller?.pause() else controller?.play()
     }
 
-    fun seekTo(position: Long) {
-        controller?.seekTo(position)
-    }
+    fun skipToNext() = controller?.seekToNextMediaItem()
+    fun skipToPrevious() = controller?.seekToPreviousMediaItem()
+    fun seekTo(position: Long) = controller?.seekTo(position)
 
     fun startSleepTimer(minutes: Int) {
-        sleepTimerManager.startTimer(minutes) {
-            controller?.pause()
-        }
+        sleepTimerManager.startTimer(minutes) { controller?.pause() }
     }
 
-    fun stopSleepTimer() {
-        sleepTimerManager.stopTimer()
-    }
+    fun stopSleepTimer() = sleepTimerManager.stopTimer()
 
-    fun downloadTrack(track: Track) {
+    fun downloadTrack(track: Track): Boolean {
+        val isLocal = track.audioUrl?.startsWith("content://") == true || 
+                     track.audioUrl?.startsWith("file://") == true ||
+                     downloadManager.getDownloadedUri(track) != null
+        if (isLocal) return false
         downloadManager.downloadTrack(track)
+        addToCurrentPlaylist(track)
+        return true
     }
 
-    fun deleteTrack(track: Track): Boolean {
-        return downloadManager.deleteTrackFile(track)
+    fun setReminder(track: Track, set: Boolean) {
+        val current = _reminderIds.value.toMutableSet()
+        if (set) current.add(track.id) else current.remove(track.id)
+        _reminderIds.value = current
     }
 
+    fun setRecommendedTrack(track: Track?) {
+        _recommendedTrack.value = track
+    }
+
+    fun deleteTrack(track: Track) = downloadManager.deleteTrackFile(track)
     fun getController(): Player? = controller
 
     override fun onCleared() {

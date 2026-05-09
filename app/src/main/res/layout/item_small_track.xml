@@ -80,6 +80,19 @@
             tools:text="3:45" />
 
         <ImageView
+            android:id="@+id/small_delete_icon"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
+            android:padding="6dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_delete"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:tint="#FF0000" />
+
+        <ImageView
             android:id="@+id/ic_playing"
             android:layout_width="24dp"
             android:layout_height="24dp"
@@ -87,7 +100,7 @@
             android:src="@android:drawable/ic_media_play"
             android:visibility="gone"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/small_delete_icon"
             app:layout_constraintTop_toTopOf="parent"
             app:tint="@color/colorPrimaryDark"
             tools:visibility="visible" />

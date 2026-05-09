@@ -45,6 +45,19 @@
                 android:contentDescription="@string/show_lyrics"
                 app:srcCompat="@drawable/ic_lyrics"
                 app:tint="@android:color/white" />
+
+            <!-- Кнопка напоминания - в правом верхнем углу обложки -->
+            <ImageButton
+                android:id="@+id/btn_reminder"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="top|end"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_circle_translucent"
+                android:padding="8dp"
+                android:contentDescription="@string/remind_later"
+                app:srcCompat="@drawable/ic_notifications_none"
+                app:tint="@android:color/white" />
         </FrameLayout>
     </androidx.cardview.widget.CardView>
 
