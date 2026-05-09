@@ -22,10 +22,11 @@
     <string name="show_playlist_desc">Show full playlist</string>
     <string name="sleep_timer_title">Sleep Timer</string>
     <string name="sleep_timer_desc">Turn off in:</string>
-    <string name="minutes_5">5 minutes</string>
+    <string name="minutes_10">10 minutes</string>
     <string name="minutes_15">15 minutes</string>
+    <string name="minutes_20">20 minutes</string>
+    <string name="minutes_25">25 minutes</string>
     <string name="minutes_30">30 minutes</string>
-    <string name="minutes_60">60 minutes</string>
     <string name="timer_off">Turn off timer</string>
     <string name="timer_set">Timer set for %1$d min.</string>
     <string name="timer_stopped">Timer stopped</string>
