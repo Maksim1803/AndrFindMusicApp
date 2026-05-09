@@ -26,6 +26,7 @@ class FavoritesFragment : Fragment() {
 
     private val mainViewModel: MainViewModel by activityViewModels()
     private lateinit var adapter: HomeAdapter
+    private var favoriteTracks: List<Track> = emptyList()
 
     @javax.inject.Inject
     lateinit var trackDao: com.example.andrfindmusicapp.data.local.TrackDao
@@ -48,7 +49,7 @@ class FavoritesFragment : Fragment() {
     private fun setupRecyclerView() {
         adapter = HomeAdapter(
             onItemClick = { track ->
-                mainViewModel.playTrackWithPlaylist(track, mainViewModel.playlist.value)
+                mainViewModel.playTrackWithPlaylist(track, favoriteTracks)
                 findNavController().navigate(R.id.navigation_player)
             },
             onFavoriteClick = { track ->
@@ -63,7 +64,7 @@ class FavoritesFragment : Fragment() {
         // Подгружаем актуальный список избранного из БД
         viewLifecycleOwner.lifecycleScope.launch {
             trackDao.getAllFavorites().collectLatest { entities ->
-                val tracks = entities.map { entity ->
+                favoriteTracks = entities.map { entity ->
                     Track(
                         id = entity.id,
                         name = entity.name,
@@ -74,7 +75,7 @@ class FavoritesFragment : Fragment() {
                         duration = entity.duration
                     )
                 }
-                adapter.updateData(tracks)
+                adapter.updateData(favoriteTracks)
             }
         }
 

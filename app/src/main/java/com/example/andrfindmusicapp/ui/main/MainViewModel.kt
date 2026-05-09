@@ -91,9 +91,11 @@ class MainViewModel @Inject constructor(
     }
 
     fun playTrackWithPlaylist(track: Track, newPlaylist: List<Track>) {
-        if (newPlaylist.isNotEmpty() && _playlist.value != newPlaylist) {
-            _playlist.value = newPlaylist
-            val mediaItems = newPlaylist.map { createMediaItem(it) }
+        val tracksToPlay = if (newPlaylist.isEmpty()) listOf(track) else newPlaylist
+        
+        if (_playlist.value != tracksToPlay) {
+            _playlist.value = tracksToPlay
+            val mediaItems = tracksToPlay.map { createMediaItem(it) }
             controller?.setMediaItems(mediaItems)
         }
 
@@ -101,6 +103,7 @@ class MainViewModel @Inject constructor(
         if (index != -1) {
             controller?.seekTo(index, 0)
         }
+
         controller?.prepare()
         controller?.play()
         _currentTrack.value = track

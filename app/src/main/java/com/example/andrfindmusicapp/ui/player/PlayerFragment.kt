@@ -62,12 +62,12 @@ class PlayerFragment : Fragment() {
             btnPlayPause.setOnClickListener { mainViewModel.togglePlayPause() }
             
             btnNext.setOnClickListener { 
-                android.widget.Toast.makeText(requireContext(), R.string.playlist_hint, android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(requireContext(), R.string.playlist_add_hint, android.widget.Toast.LENGTH_SHORT).show()
                 mainViewModel.skipToNext() 
             }
 
             btnPrev.setOnClickListener { 
-                android.widget.Toast.makeText(requireContext(), R.string.playlist_hint, android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(requireContext(), R.string.playlist_add_hint, android.widget.Toast.LENGTH_SHORT).show()
                 mainViewModel.skipToPrevious() 
             }
             
