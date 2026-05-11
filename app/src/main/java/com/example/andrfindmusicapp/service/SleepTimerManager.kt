@@ -17,8 +17,12 @@ class SleepTimerManager @Inject constructor() {
     private val _isTimerRunning = MutableStateFlow(false)
     val isTimerRunning = _isTimerRunning.asStateFlow()
 
+    private var _lastSetMinutes = 0
+    val lastSetMinutes: Int get() = if (_isTimerRunning.value) _lastSetMinutes else -1
+
     // Метод для запуска таймера на указанное количество минут
     fun startTimer(minutes: Int, onTimerFinished: () -> Unit) {
+        _lastSetMinutes = minutes
         timer?.cancel()
         val millis = minutes * 60 * 1000L
         

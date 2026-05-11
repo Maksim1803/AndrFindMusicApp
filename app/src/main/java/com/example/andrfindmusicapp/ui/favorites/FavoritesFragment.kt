@@ -31,6 +31,7 @@ class FavoritesFragment : Fragment() {
     @javax.inject.Inject
     lateinit var trackDao: com.example.andrfindmusicapp.data.local.TrackDao
 
+    // Метод для создания View и инициализации binding
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -40,12 +41,14 @@ class FavoritesFragment : Fragment() {
         return binding.root
     }
 
+    // Метод для настройки логики фрагмента после создания View
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupRecyclerView()
         observeViewModel()
     }
 
+    // Метод для настройки RecyclerView и его адаптера
     private fun setupRecyclerView() {
         adapter = HomeAdapter(
             onItemClick = { track ->
@@ -54,12 +57,16 @@ class FavoritesFragment : Fragment() {
             },
             onFavoriteClick = { track ->
                 mainViewModel.toggleFavorite(track)
+            },
+            onReminderClick = { track ->
+                showReminderDialog(track)
             }
         )
         binding.favoritesRecycler.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(requireContext())
         binding.favoritesRecycler.adapter = adapter
     }
 
+    // Метод для подписки на изменения данных (избранное, напоминания)
     private fun observeViewModel() {
         // Подгружаем актуальный список избранного из БД
         viewLifecycleOwner.lifecycleScope.launch {
@@ -88,6 +95,30 @@ class FavoritesFragment : Fragment() {
             mainViewModel.favoriteIds.collectLatest { favIds ->
                 adapter.updateFavorites(favIds)
             }
+        }
+
+        // Обновляем иконки напоминаний через MainViewModel
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainViewModel.reminderIds.collectLatest { remIds ->
+                adapter.updateReminders(remIds)
+            }
+        }
+    }
+
+    // Метод для показа диалога удаления напоминания
+    private fun showReminderDialog(track: Track) {
+        val timeMillis = mainViewModel.reminderTimes.value[track.id] ?: return
+        val calendar = java.util.Calendar.getInstance().apply { this.timeInMillis = timeMillis }
+        val dateStr = android.text.format.DateFormat.getDateFormat(requireContext()).format(calendar.time)
+        val timeStr = android.text.format.DateFormat.getTimeFormat(requireContext()).format(calendar.time)
+
+        com.example.andrfindmusicapp.utils.DialogHelper.showReminderDeleteDialog(
+            requireContext(),
+            dateStr,
+            timeStr
+        ) {
+            mainViewModel.removeReminder(track.id)
+            android.widget.Toast.makeText(requireContext(), R.string.reminder_removed, android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 

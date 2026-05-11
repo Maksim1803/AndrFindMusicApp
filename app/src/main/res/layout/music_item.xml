@@ -128,6 +128,20 @@
             app:srcCompat="@drawable/ic_star_border"
             app:tint="@color/colorPrimaryDark" />
 
+        <ImageView
+            android:id="@+id/reminder_icon"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginEnd="8dp"
+            android:padding="4dp"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="@+id/favorite_icon"
+            app:layout_constraintEnd_toStartOf="@+id/favorite_icon"
+            app:layout_constraintTop_toTopOf="@+id/favorite_icon"
+            app:srcCompat="@drawable/ic_notifications_active"
+            app:tint="@color/colorPrimaryDark"
+            tools:visibility="visible" />
+
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.cardview.widget.CardView>

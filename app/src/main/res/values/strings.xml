@@ -55,6 +55,8 @@
     <string name="listen_now">Слушать</string>
     <string name="remind_later">Напомнить позже</string>
     <string name="reminder_set">Напоминание установлено на %1$s</string>
+    <string name="reminder_delete_confirm">Этот трек включится в %1$s, вы хотите удалить это напоминание?</string>
+    <string name="reminder_removed">Напоминание удалено</string>
     <string name="daily_recommendation_notif_title">Ваш трек дня!</string>
     <string name="daily_recommendation_notif_text">Мы подобрали кое-что особенное</string>
 </resources>

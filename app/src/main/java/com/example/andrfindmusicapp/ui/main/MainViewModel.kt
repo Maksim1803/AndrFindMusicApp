@@ -21,6 +21,7 @@ import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+// Класс для управления общим состоянием приложения, плеером и данными
 @HiltViewModel
 class MainViewModel @Inject constructor(
     @ApplicationContext context: Context,
@@ -45,13 +46,43 @@ class MainViewModel @Inject constructor(
     private val _reminderIds = MutableStateFlow<Set<String>>(emptySet())
     val reminderIds = _reminderIds.asStateFlow()
 
-    private val _recommendedTrack = MutableStateFlow<Track?>(null)
-    val recommendedTrack = _recommendedTrack.asStateFlow()
+    // Храним время напоминания для каждого трека
+    private val _reminderTimes = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val reminderTimes = _reminderTimes.asStateFlow()
 
     private var controller: MediaController? = null
     private val _isControllerReady = MutableStateFlow(false)
 
     init {
+        // Загружаем сохраненные напоминания и времена
+        val savedReminders = preferenceProvider.getReminders()
+        val savedTimes = preferenceProvider.getReminderTimes().toMutableMap()
+        
+        // Миграция: если есть старое напоминание без времени, ставим ему 10:00
+        var needsUpdate = false
+        savedReminders.forEach { id ->
+            if (!savedTimes.containsKey(id)) {
+                val cal = java.util.Calendar.getInstance().apply {
+                    set(java.util.Calendar.HOUR_OF_DAY, 10)
+                    set(java.util.Calendar.MINUTE, 0)
+                    set(java.util.Calendar.SECOND, 0)
+                    // Если 10:00 сегодня уже прошло, ставим на завтра
+                    if (timeInMillis <= System.currentTimeMillis()) {
+                        add(java.util.Calendar.DAY_OF_YEAR, 1)
+                    }
+                }
+                savedTimes[id] = cal.timeInMillis
+                needsUpdate = true
+            }
+        }
+        
+        if (needsUpdate) {
+            preferenceProvider.saveReminderTimes(savedTimes)
+        }
+
+        _reminderIds.value = savedReminders
+        _reminderTimes.value = savedTimes
+
         viewModelScope.launch {
             val sessionToken = SessionToken(context, ComponentName(context, PlaybackService::class.java))
             val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
@@ -102,6 +133,7 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    // Метод для создания MediaItem из объекта Track
     private fun createMediaItem(track: Track): MediaItem {
         return MediaItem.Builder()
             .setMediaId(track.id)
@@ -116,6 +148,7 @@ class MainViewModel @Inject constructor(
             .build()
     }
 
+    // Метод для запуска воспроизведения трека в контексте плейлиста
     fun playTrackWithPlaylist(track: Track, newPlaylist: List<Track>) {
         viewModelScope.launch {
             // Ждем готовности контроллера
@@ -148,6 +181,7 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    // Метод для переключения статуса "избранное" для трека
     fun toggleFavorite(track: Track) {
         viewModelScope.launch {
             val isCurrentlyFav = trackDao.isFavorite(track.id)
@@ -173,6 +207,7 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    // Метод для добавления трека в текущий плейлист
     private fun addToCurrentPlaylist(track: Track) {
         val currentList = _playlist.value.toMutableList()
         if (!currentList.any { it.id == track.id }) {
@@ -183,6 +218,7 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    // Метод для удаления трека из текущего плейлиста
     fun removeFromPlaylist(track: Track) {
         val currentList = _playlist.value.toMutableList()
         val index = currentList.indexOfFirst { it.id == track.id }
@@ -194,20 +230,25 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    // Метод для переключения воспроизведение/пауза
     fun togglePlayPause() {
         if (controller?.isPlaying == true) controller?.pause() else controller?.play()
     }
 
+    // Методы для управления воспроизведением
     fun skipToNext() = controller?.seekToNextMediaItem()
     fun skipToPrevious() = controller?.seekToPreviousMediaItem()
     fun seekTo(position: Long) = controller?.seekTo(position)
 
+    // Метод для запуска таймера сна
     fun startSleepTimer(minutes: Int) {
         sleepTimerManager.startTimer(minutes) { controller?.pause() }
     }
 
+    // Метод для остановки таймера сна
     fun stopSleepTimer() = sleepTimerManager.stopTimer()
 
+    // Метод для скачивания трека
     fun downloadTrack(track: Track): Boolean {
         val isLocal = track.audioUrl?.startsWith("content://") == true || 
                      track.audioUrl?.startsWith("file://") == true ||
@@ -218,17 +259,36 @@ class MainViewModel @Inject constructor(
         return true
     }
 
-    fun setReminder(track: Track, set: Boolean) {
-        val current = _reminderIds.value.toMutableSet()
-        if (set) current.add(track.id) else current.remove(track.id)
-        _reminderIds.value = current
+    // Метод для установки напоминания для трека
+    fun setReminder(track: Track, timeMillis: Long) {
+        val currentIds = _reminderIds.value.toMutableSet()
+        currentIds.add(track.id)
+        _reminderIds.value = currentIds
+        preferenceProvider.saveReminders(currentIds)
+
+        val currentTimes = _reminderTimes.value.toMutableMap()
+        currentTimes[track.id] = timeMillis
+        _reminderTimes.value = currentTimes
+        preferenceProvider.saveReminderTimes(currentTimes)
     }
 
-    fun setRecommendedTrack(track: Track?) {
-        _recommendedTrack.value = track
+    // Метод для удаления напоминания для трека
+    fun removeReminder(trackId: String) {
+        val currentIds = _reminderIds.value.toMutableSet()
+        currentIds.remove(trackId)
+        _reminderIds.value = currentIds
+        preferenceProvider.saveReminders(currentIds)
+
+        val currentTimes = _reminderTimes.value.toMutableMap()
+        currentTimes.remove(trackId)
+        _reminderTimes.value = currentTimes
+        preferenceProvider.saveReminderTimes(currentTimes)
     }
 
+    // Метод для удаления физического файла трека
     fun deleteTrack(track: Track) = downloadManager.deleteTrackFile(track)
+    
+    // Метод для получения контроллера плеера
     fun getController(): Player? = controller
 
     override fun onCleared() {

@@ -7,10 +7,9 @@ import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
 import com.example.andrfindmusicapp.databinding.ActivityMainBinding
 import com.example.andrfindmusicapp.ui.main.MainViewModel
-import com.example.andrfindmusicapp.utils.PreferenceProvider
-import com.example.andrfindmusicapp.data.model.DailyTrackProvider
 import dagger.hilt.android.AndroidEntryPoint
 
+// Главный класс приложения
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -26,18 +25,20 @@ class MainActivity : AppCompatActivity() {
         val navController = navHostFragment.navController
         binding.bottomNav.setupWithNavController(navController)
 
-        val preferenceProvider = PreferenceProvider(this)
-
         if (savedInstanceState == null) {
             binding.root.post {
                 // 1. Напоминание
                 if (intent.getBooleanExtra("is_reminder", false)) {
-                    val track = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                        intent.getSerializableExtra("recommended_track", com.example.andrfindmusicapp.data.model.Track::class.java)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        intent.getSerializableExtra("recommended_track") as? com.example.andrfindmusicapp.data.model.Track
-                    }
+                    val track =
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                            intent.getSerializableExtra(
+                                "recommended_track",
+                                com.example.andrfindmusicapp.data.model.Track::class.java
+                            )
+                        } else {
+                            @Suppress("DEPRECATION")
+                            intent.getSerializableExtra("recommended_track") as? com.example.andrfindmusicapp.data.model.Track
+                        }
                     if (track != null) {
                         mainViewModel.playTrackWithPlaylist(track, emptyList())
                         navController.navigate(R.id.navigation_player)
@@ -45,12 +46,6 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
-                // 2. Презентация при старте
-                if (preferenceProvider.shouldUpdateDailyTrack() || DailyTrackProvider.currentDailyTrack == null) {
-                    DailyTrackProvider.currentDailyTrack = DailyTrackProvider.getBaseTrack()
-                }
-
-                navController.navigate(R.id.navigation_recommendation)
             }
         }
 

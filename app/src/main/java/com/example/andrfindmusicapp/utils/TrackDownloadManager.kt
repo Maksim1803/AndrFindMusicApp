@@ -10,12 +10,14 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
+// Класс для управления загрузкой аудиофайлов на устройство
 @Singleton
 class TrackDownloadManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
+    // Метод для запуска процесса загрузки трека
     fun downloadTrack(track: Track) {
         val url = track.audioUrl ?: return
         val fileName = "${track.artistName} - ${track.name}.mp3"
@@ -50,7 +52,7 @@ class TrackDownloadManager @Inject constructor(
                 val publicFile = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), fileName)
                 publicFile.delete()
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }

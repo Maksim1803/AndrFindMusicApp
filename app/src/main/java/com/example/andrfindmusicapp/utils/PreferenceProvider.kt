@@ -22,7 +22,7 @@ class PreferenceProvider(context: Context) {
         return preference.getString(KEY_LAST_CATEGORY, DEFAULT_CATEGORY) ?: DEFAULT_CATEGORY
     }
 
-    // Сохранение последнего трека и плейлиста
+    // Метод для сохранения последнего трека и плейлиста
     fun saveLastState(track: Track?, playlist: List<Track>) {
         val editor = preference.edit()
         editor.putString(KEY_LAST_TRACK, gson.toJson(track))
@@ -30,7 +30,7 @@ class PreferenceProvider(context: Context) {
         editor.apply()
     }
 
-    // Получение последнего трека
+    // Метод для получения последнего трека
     fun getLastTrack(): Track? {
         val json = preference.getString(KEY_LAST_TRACK, null) ?: return null
         return try {
@@ -40,7 +40,7 @@ class PreferenceProvider(context: Context) {
         }
     }
 
-    // Получение последнего плейлиста
+    // Метод для получения последнего плейлиста
     fun getLastPlaylist(): List<Track> {
         val json = preference.getString(KEY_LAST_PLAYLIST, null) ?: return emptyList()
         return try {
@@ -51,35 +51,35 @@ class PreferenceProvider(context: Context) {
         }
     }
 
-    // Проверка, нужно ли сменить рекомендованный трек (раз в сутки)
-    fun shouldUpdateDailyTrack(): Boolean {
-        val lastUpdate = preference.getLong(KEY_LAST_TRACK_UPDATE, 0)
-        val today = java.util.Calendar.getInstance().apply {
-            set(java.util.Calendar.HOUR_OF_DAY, 0)
-            set(java.util.Calendar.MINUTE, 0)
-            set(java.util.Calendar.SECOND, 0)
-            set(java.util.Calendar.MILLISECOND, 0)
-        }.timeInMillis
-        
-        return if (lastUpdate < today) {
-            preference.edit().putLong(KEY_LAST_TRACK_UPDATE, System.currentTimeMillis()).apply()
-            true
-        } else {
-            false
+    // Метод для сохранения списка ID напоминаний
+    fun saveReminders(reminderIds: Set<String>) {
+        preference.edit().putString(KEY_REMINDERS, gson.toJson(reminderIds)).apply()
+    }
+
+    // Метод для получения списка ID напоминаний
+    fun getReminders(): Set<String> {
+        val json = preference.getString(KEY_REMINDERS, null) ?: return emptySet()
+        return try {
+            val type = object : TypeToken<Set<String>>() {}.type
+            gson.fromJson(json, type)
+        } catch (e: Exception) {
+            emptySet()
         }
     }
 
-    // Сохранение/получение ежедневного трека
-    fun saveDailyTrack(track: Track) {
-        preference.edit().putString(KEY_DAILY_TRACK, gson.toJson(track)).apply()
+    // Метод для сохранения времени напоминаний
+    fun saveReminderTimes(times: Map<String, Long>) {
+        preference.edit().putString(KEY_REMINDER_TIMES, gson.toJson(times)).apply()
     }
 
-    fun getDailyTrack(): Track? {
-        val json = preference.getString(KEY_DAILY_TRACK, null) ?: return null
+    // Метод для получения времени напоминаний
+    fun getReminderTimes(): Map<String, Long> {
+        val json = preference.getString(KEY_REMINDER_TIMES, null) ?: return emptyMap()
         return try {
-            gson.fromJson(json, Track::class.java)
+            val type = object : TypeToken<Map<String, Long>>() {}.type
+            gson.fromJson(json, type)
         } catch (e: Exception) {
-            null
+            emptyMap()
         }
     }
 
@@ -88,7 +88,7 @@ class PreferenceProvider(context: Context) {
         private const val DEFAULT_CATEGORY = "pop"
         private const val KEY_LAST_TRACK = "last_track"
         private const val KEY_LAST_PLAYLIST = "last_playlist"
-        private const val KEY_LAST_TRACK_UPDATE = "last_track_update"
-        private const val KEY_DAILY_TRACK = "daily_track"
+        private const val KEY_REMINDERS = "reminder_ids"
+        private const val KEY_REMINDER_TIMES = "reminder_times"
     }
 }

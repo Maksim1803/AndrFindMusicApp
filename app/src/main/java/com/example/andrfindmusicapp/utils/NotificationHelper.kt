@@ -12,9 +12,11 @@ import com.example.andrfindmusicapp.MainActivity
 import com.example.andrfindmusicapp.R
 import com.example.andrfindmusicapp.data.model.Track
 
+// Класс для управления созданием и отображением системных уведомлений
 object NotificationHelper {
     private const val CHANNEL_ID = "daily_recommendation_channel"
 
+    // Метод для создания канала уведомлений (необходимо для Android 8.0+)
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val name = "Daily Recommendations"
@@ -29,6 +31,7 @@ object NotificationHelper {
         }
     }
 
+    // Метод для отображения уведомления о рекомендации трека или напоминании
     fun showRecommendationNotification(context: Context, track: Track? = null, isReminder: Boolean = false) {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK

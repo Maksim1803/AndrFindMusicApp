@@ -23,6 +23,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+// Класс для фрагмента, отображающего локальные (скачанные) треки на устройстве
 @AndroidEntryPoint
 class LocalTracksFragment : Fragment() {
     private var _binding: FragmentLocalTracksBinding? = null
@@ -33,6 +34,7 @@ class LocalTracksFragment : Fragment() {
 
     private lateinit var adapter: HomeAdapter
 
+    // Обработчик запроса разрешений на чтение памяти
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -41,6 +43,7 @@ class LocalTracksFragment : Fragment() {
         }
     }
 
+    // Метод для создания View и инициализации binding
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -49,6 +52,7 @@ class LocalTracksFragment : Fragment() {
         return binding.root
     }
 
+    // Метод для настройки фрагмента после создания View
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupRecyclerView()
@@ -56,6 +60,7 @@ class LocalTracksFragment : Fragment() {
         checkPermissionAndLoad()
     }
 
+    // Метод для настройки RecyclerView и его адаптера для локальных треков
     private fun setupRecyclerView() {
         adapter = HomeAdapter(
             onItemClick = { track ->
@@ -65,6 +70,9 @@ class LocalTracksFragment : Fragment() {
             onFavoriteClick = { track ->
                 mainViewModel.toggleFavorite(track)
             },
+            onReminderClick = { track ->
+                showReminderDialog(track)
+            },
             onDeleteClick = { track ->
                 showDeleteConfirmDialog(track)
             }
@@ -72,6 +80,7 @@ class LocalTracksFragment : Fragment() {
         binding.rvLocalTracks.adapter = adapter
     }
 
+    // Метод для показа диалога подтверждения удаления локального файла
     private fun showDeleteConfirmDialog(track: Track) {
         androidx.appcompat.app.AlertDialog.Builder(requireContext())
             .setTitle(R.string.delete_track_title)
@@ -86,6 +95,24 @@ class LocalTracksFragment : Fragment() {
             .show()
     }
 
+    // Метод для показа диалога удаления напоминания
+    private fun showReminderDialog(track: Track) {
+        val timeMillis = mainViewModel.reminderTimes.value[track.id] ?: return
+        val calendar = java.util.Calendar.getInstance().apply { this.timeInMillis = timeMillis }
+        val dateStr = android.text.format.DateFormat.getDateFormat(requireContext()).format(calendar.time)
+        val timeStr = android.text.format.DateFormat.getTimeFormat(requireContext()).format(calendar.time)
+
+        com.example.andrfindmusicapp.utils.DialogHelper.showReminderDeleteDialog(
+            requireContext(),
+            dateStr,
+            timeStr
+        ) {
+            mainViewModel.removeReminder(track.id)
+            android.widget.Toast.makeText(requireContext(), R.string.reminder_removed, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Метод для подписки на изменения данных во ViewModel
     private fun observeViewModel() {
         viewModel.localTracks.observe(viewLifecycleOwner) { tracks ->
             adapter.updateData(tracks)
@@ -96,14 +123,22 @@ class LocalTracksFragment : Fragment() {
             binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
         }
 
-        // ДОБАВЛЕНО: Наблюдаем за избранным, чтобы звездочки обновлялись
+        // Наблюдаем за избранным, чтобы звездочки обновлялись
         viewLifecycleOwner.lifecycleScope.launch {
             mainViewModel.favoriteIds.collectLatest { favIds ->
                 adapter.updateFavorites(favIds)
             }
         }
+
+        // Наблюдаем за напоминаниями, чтобы колокольчики обновлялись
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainViewModel.reminderIds.collectLatest { remIds ->
+                adapter.updateReminders(remIds)
+            }
+        }
     }
 
+    // Метод для проверки разрешений и запуска загрузки локальных треков
     private fun checkPermissionAndLoad() {
         val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_AUDIO

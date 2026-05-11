@@ -13,11 +13,13 @@ import com.example.andrfindmusicapp.utils.TimeUtils
 class HomeAdapter(
     private val onItemClick: (Track) -> Unit,
     private val onFavoriteClick: (Track) -> Unit,
+    private val onReminderClick: (Track) -> Unit,
     private val onDeleteClick: ((Track) -> Unit)? = null
 ) : RecyclerView.Adapter<HomeAdapter.ViewHolder>() {
 
     private var tracks: List<Track> = emptyList()
     private var favoriteIds: Set<String> = emptySet()
+    private var reminderIds: Set<String> = emptySet()
 
     // Метод для обновления списка треков
     fun updateData(newTracks: List<Track>) {
@@ -28,6 +30,12 @@ class HomeAdapter(
     // Метод для обновления списка идентификаторов избранных треков
     fun updateFavorites(newFavoriteIds: Set<String>) {
         favoriteIds = newFavoriteIds
+        notifyDataSetChanged()
+    }
+
+    // Метод для обновления списка идентификаторов напоминаний
+    fun updateReminders(newReminderIds: Set<String>) {
+        reminderIds = newReminderIds
         notifyDataSetChanged()
     }
 
@@ -59,8 +67,16 @@ class HomeAdapter(
                 else com.example.andrfindmusicapp.R.drawable.ic_star_border
             )
 
+            // Метод для обработки клика по иконке избранного
             favoriteIcon.setOnClickListener { onFavoriteClick(track) }
             
+            // Показываем иконку колокольчика, если установлено напоминание
+            val hasReminder = reminderIds.contains(track.id)
+            reminderIcon.visibility = if (hasReminder) View.VISIBLE else View.GONE
+            
+            // Метод для обработки клика по иконке напоминания
+            reminderIcon.setOnClickListener { onReminderClick(track) }
+
             // Если передан колбэк для удаления, показываем иконку корзины
             if (onDeleteClick != null) {
                 deleteIcon.visibility = View.VISIBLE
@@ -73,6 +89,7 @@ class HomeAdapter(
             val isLocal = track.audioUrl?.startsWith("content://") == true || track.audioUrl?.startsWith("file://") == true
             localIndicatorIcon.visibility = if (isLocal) View.VISIBLE else View.GONE
 
+            // Метод для обработки клика по всему элементу списка
             root.setOnClickListener { onItemClick(track) }
         }
     }

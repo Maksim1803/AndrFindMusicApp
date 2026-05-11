@@ -34,6 +34,7 @@ class PlayerFragment : Fragment() {
     // Флаг для предотвращения прыжков SeekBar при перемотке
     private var isUserSeeking = false
 
+    // Обработчик запроса разрешений для скачивания
     private val requestPermissionLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -45,6 +46,7 @@ class PlayerFragment : Fragment() {
         }
     }
 
+    // Метод для создания View и инициализации binding
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -54,6 +56,7 @@ class PlayerFragment : Fragment() {
         return binding.root
     }
 
+    // Метод для настройки логики фрагмента после создания View
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
@@ -63,6 +66,7 @@ class PlayerFragment : Fragment() {
         startSeekBarUpdate()
     }
 
+    // Метод для настройки списка (RecyclerView) очереди воспроизведения
     private fun setupRecyclerView() {
         playlistAdapter = PlaylistAdapter(
             onItemClick = { track ->
@@ -75,6 +79,7 @@ class PlayerFragment : Fragment() {
         binding.rvSmallPlaylist.adapter = playlistAdapter
     }
 
+    // Метод для настройки обработчиков кликов по элементам интерфейса
     private fun setupListeners() {
         with(binding) {
             btnPlayPause.setOnClickListener { mainViewModel.togglePlayPause() }
@@ -99,7 +104,11 @@ class PlayerFragment : Fragment() {
 
             btnReminder.setOnClickListener {
                 mainViewModel.currentTrack.value?.let { track ->
-                    showDateTimePicker(track)
+                    if (mainViewModel.reminderIds.value.contains(track.id)) {
+                        showRemoveReminderDialog(track)
+                    } else {
+                        showDateTimePicker(track)
+                    }
                 }
             }
 
@@ -153,6 +162,7 @@ class PlayerFragment : Fragment() {
         }
     }
 
+    // Метод для подписки на изменения данных в ViewModel
     private fun observeViewModel() {
         // Объединяем наблюдение за текущим треком, избранным и напоминаниями
         viewLifecycleOwner.lifecycleScope.launch {
@@ -176,6 +186,14 @@ class PlayerFragment : Fragment() {
                     binding.btnReminder.setImageResource(
                         if (hasReminder) R.drawable.ic_notifications_active else R.drawable.ic_notifications_none
                     )
+                    // Всегда синий цвет иконки (как у звездочки)
+                    binding.btnReminder.imageTintList = android.content.res.ColorStateList.valueOf(
+                        androidx.core.content.ContextCompat.getColor(requireContext(), R.color.colorPrimaryDark)
+                    )
+                    // Всегда светлый (белый) фон для кнопки
+                    binding.btnReminder.backgroundTintList = android.content.res.ColorStateList.valueOf(
+                        android.graphics.Color.WHITE
+                    )
                 }
             }
         }
@@ -193,8 +211,24 @@ class PlayerFragment : Fragment() {
                 )
             }
         }
+
+        // Наблюдение за состоянием таймера сна
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainViewModel.sleepTimerManager.isTimerRunning.collectLatest { isRunning ->
+                binding.btnSleepTimer.setImageResource(
+                    if (isRunning) R.drawable.ic_alarm_on else R.drawable.ic_alarm_off
+                )
+                binding.btnSleepTimer.imageTintList = android.content.res.ColorStateList.valueOf(
+                    ContextCompat.getColor(
+                        requireContext(),
+                        if (isRunning) R.color.colorPrimaryDark else R.color.player_icon_tint
+                    )
+                )
+            }
+        }
     }
 
+    // Метод для обновления UI данными трека
     private fun setupUI(track: Track) {
         binding.detailsTitle.text = track.name
         binding.detailsArtist.text = track.artistName
@@ -211,6 +245,7 @@ class PlayerFragment : Fragment() {
         binding.seekBar.max = (track.duration ?: 0) * 1000 // Jamendo дает в секундах
     }
 
+    // Метод для того, чтобы поделиться информацией о треке
     private fun shareTrack(track: Track) {
         val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = "text/plain"
@@ -220,6 +255,7 @@ class PlayerFragment : Fragment() {
         startActivity(android.content.Intent.createChooser(shareIntent, getString(R.string.share_content_description)))
     }
 
+    // Метод для показа выбора даты и времени напоминания
     private fun showDateTimePicker(track: Track) {
         val calendar = Calendar.getInstance()
         val datePicker = android.app.DatePickerDialog(
@@ -239,14 +275,17 @@ class PlayerFragment : Fragment() {
                         if (calendar.timeInMillis <= System.currentTimeMillis()) {
                             android.widget.Toast.makeText(requireContext(), "Выберите время в будущем", android.widget.Toast.LENGTH_SHORT).show()
                         } else {
-                            mainViewModel.setReminder(track, true)
+                            mainViewModel.setReminder(track, calendar.timeInMillis)
                             val dateStr = android.text.format.DateFormat.getDateFormat(requireContext()).format(calendar.time)
                             val timeStr = android.text.format.DateFormat.getTimeFormat(requireContext()).format(calendar.time)
                             android.widget.Toast.makeText(requireContext(), getString(R.string.reminder_set, "$dateStr $timeStr"), android.widget.Toast.LENGTH_SHORT).show()
                             
                             // Schedule the notification as a reminder
                             binding.root.postDelayed({
-                                com.example.andrfindmusicapp.utils.NotificationHelper.showRecommendationNotification(requireContext(), track, isReminder = true)
+                                // Проверяем, не удалили ли напоминание к этому моменту
+                                if (mainViewModel.reminderIds.value.contains(track.id)) {
+                                    com.example.andrfindmusicapp.utils.NotificationHelper.showRecommendationNotification(requireContext(), track, isReminder = true)
+                                }
                             }, calendar.timeInMillis - System.currentTimeMillis())
                         }
                     },
@@ -262,6 +301,24 @@ class PlayerFragment : Fragment() {
         datePicker.show()
     }
 
+    // Метод для показа диалога удаления напоминания
+    private fun showRemoveReminderDialog(track: Track) {
+        val timeMillis = mainViewModel.reminderTimes.value[track.id] ?: return
+        val calendar = Calendar.getInstance().apply { this.timeInMillis = timeMillis }
+        val dateStr = android.text.format.DateFormat.getDateFormat(requireContext()).format(calendar.time)
+        val timeStr = android.text.format.DateFormat.getTimeFormat(requireContext()).format(calendar.time)
+
+        com.example.andrfindmusicapp.utils.DialogHelper.showReminderDeleteDialog(
+            requireContext(),
+            dateStr,
+            timeStr
+        ) {
+            mainViewModel.removeReminder(track.id)
+            android.widget.Toast.makeText(requireContext(), R.string.reminder_removed, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Метод для показа диалога настройки таймера сна
     private fun showSleepTimerDialog() {
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_sleep_timer, null)
         val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
@@ -285,6 +342,25 @@ class PlayerFragment : Fragment() {
         title.setTextColor(ContextCompat.getColor(requireContext(), textColor))
 
         val rgOptions = dialogView.findViewById<android.widget.RadioGroup>(R.id.rg_timer_options)
+        
+        // Пре-селект текущего значения таймера
+        val currentMinutes = mainViewModel.sleepTimerManager.lastSetMinutes
+        if (currentMinutes > 0) {
+            val radioButtonId = when (currentMinutes) {
+                10 -> R.id.rb_10
+                15 -> R.id.rb_15
+                20 -> R.id.rb_20
+                25 -> R.id.rb_25
+                30 -> R.id.rb_30
+                else -> -1
+            }
+            if (radioButtonId != -1) {
+                rgOptions.check(radioButtonId)
+            }
+        } else {
+            rgOptions.check(R.id.rb_off)
+        }
+
         for (i in 0 until rgOptions.childCount) {
             val rb = rgOptions.getChildAt(i) as android.widget.RadioButton
             rb.setTextColor(ContextCompat.getColor(requireContext(), textColor))
@@ -319,6 +395,7 @@ class PlayerFragment : Fragment() {
         dialog.show()
     }
 
+    // Метод для циклического обновления SeekBar в зависимости от прогресса воспроизведения
     private fun startSeekBarUpdate() {
         viewLifecycleOwner.lifecycleScope.launch {
             while (true) {

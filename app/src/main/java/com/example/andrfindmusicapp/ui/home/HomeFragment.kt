@@ -8,19 +8,13 @@ import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.example.andrfindmusicapp.R
-import com.example.andrfindmusicapp.data.local.AppDatabase
-import com.example.andrfindmusicapp.data.local.TrackEntity
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.FragmentHomeBinding
 import com.example.andrfindmusicapp.ui.home.adapter.HomeAdapter
 import com.example.andrfindmusicapp.ui.main.MainViewModel
-import com.example.andrfindmusicapp.ui.player.PlayerViewModel
-import com.example.andrfindmusicapp.utils.PreferenceProvider
 import com.example.andrfindmusicapp.viewmodel.HomeViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -91,7 +85,7 @@ class HomeFragment : Fragment() {
     private fun toggleTheme() {
         val currentNightMode = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
         if (currentNightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) {
-            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO)
+            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
         } else {
             androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
         }
@@ -108,8 +102,23 @@ class HomeFragment : Fragment() {
         // Используем современный способ переключения (работает на всех версиях Android)
         val appLocale: androidx.core.os.LocaleListCompat = androidx.core.os.LocaleListCompat.forLanguageTags(newLang)
         androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(appLocale)
-        
-        // AppCompatDelegate сам вызовет recreate() при необходимости
+    }
+
+    // Метод для показа диалога подтверждения удаления напоминания
+    private fun showReminderDialog(track: Track) {
+        val timeMillis = mainViewModel.reminderTimes.value[track.id] ?: return
+        val calendar = java.util.Calendar.getInstance().apply { this.timeInMillis = timeMillis }
+        val dateStr = android.text.format.DateFormat.getDateFormat(requireContext()).format(calendar.time)
+        val timeStr = android.text.format.DateFormat.getTimeFormat(requireContext()).format(calendar.time)
+
+        com.example.andrfindmusicapp.utils.DialogHelper.showReminderDeleteDialog(
+            requireContext(),
+            dateStr,
+            timeStr
+        ) {
+            mainViewModel.removeReminder(track.id)
+            android.widget.Toast.makeText(requireContext(), R.string.reminder_removed, android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     // Метод для настройки RecyclerView и его адаптера
@@ -121,6 +130,9 @@ class HomeFragment : Fragment() {
             },
             onFavoriteClick = { track ->
                 mainViewModel.toggleFavorite(track)
+            },
+            onReminderClick = { track ->
+                showReminderDialog(track)
             }
         )
         binding.mainRecycler.adapter = adapter
@@ -175,6 +187,12 @@ class HomeFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             mainViewModel.favoriteIds.collectLatest { favIds ->
                 adapter.updateFavorites(favIds)
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainViewModel.reminderIds.collectLatest { remIds ->
+                adapter.updateReminders(remIds)
             }
         }
     }
