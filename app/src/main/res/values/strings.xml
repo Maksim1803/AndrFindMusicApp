@@ -22,10 +22,11 @@
     <string name="show_playlist_desc">Показать весь плейлист</string>
     <string name="sleep_timer_title">Таймер сна</string>
     <string name="sleep_timer_desc">Выключить через:</string>
-    <string name="minutes_5">5 минут</string>
+    <string name="minutes_10">10 минут</string>
     <string name="minutes_15">15 минут</string>
+    <string name="minutes_20">20 минут</string>
+    <string name="minutes_25">25 минут</string>
     <string name="minutes_30">30 минут</string>
-    <string name="minutes_60">60 минут</string>
     <string name="timer_off">Выключить таймер</string>
     <string name="timer_set">Таймер установлен на %1$d мин.</string>
     <string name="timer_stopped">Таймер остановлен</string>
@@ -34,6 +35,7 @@
     <string name="download_content_description">Скачать трек</string>
     <string name="share_text">Слушаю трек %1$s от %2$s в приложении AndrFindMusic!</string>
     <string name="download_started">Загрузка началась...</string>
+    <string name="download_already_exists">Этот трек уже скачан</string>
     <string name="download_failed">Ошибка загрузки</string>
     <string name="no_local_tracks">Локальные треки не найдены</string>
     <string name="local_tracks_tab">Моя музыка</string>
@@ -49,4 +51,12 @@
     <string name="track_deleted">Трек удален</string>
     <string name="delete_failed">Не удалось удалить файл</string>
     <string name="search_tab">Поиск</string>
+    <string name="recommendation_title">Рекомендуем сегодня:</string>
+    <string name="listen_now">Слушать</string>
+    <string name="remind_later">Напомнить позже</string>
+    <string name="reminder_set">Напоминание установлено на %1$s</string>
+    <string name="reminder_delete_confirm">Этот трек включится в %1$s, вы хотите удалить это напоминание?</string>
+    <string name="reminder_removed">Напоминание удалено</string>
+    <string name="daily_recommendation_notif_title">Ваш трек дня!</string>
+    <string name="daily_recommendation_notif_text">Мы подобрали кое-что особенное</string>
 </resources>

@@ -11,13 +11,15 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.example.andrfindmusicapp.R
+import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.FragmentHomeBinding
 import com.example.andrfindmusicapp.ui.home.adapter.HomeAdapter
 import com.example.andrfindmusicapp.ui.main.MainViewModel
 import com.example.andrfindmusicapp.viewmodel.HomeViewModel
-import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+
+import dagger.hilt.android.AndroidEntryPoint
 
 // Класс для главного экрана приложения, отображающего список треков и поиск
 @AndroidEntryPoint
@@ -83,7 +85,7 @@ class HomeFragment : Fragment() {
     private fun toggleTheme() {
         val currentNightMode = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
         if (currentNightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) {
-            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO)
+            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
         } else {
             androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
         }
@@ -91,27 +93,32 @@ class HomeFragment : Fragment() {
 
     // Метод для переключения языка интерфейса (RU/EN)
     private fun toggleLanguage() {
-        val currentLang = resources.configuration.locales[0].language
+        // Получаем текущий язык через AppCompat (он вернет системный, если выбор еще не сделан)
+        val currentLocale = androidx.appcompat.app.AppCompatDelegate.getApplicationLocales()[0]
+        val currentLang = currentLocale?.language ?: java.util.Locale.getDefault().language
+        
         val newLang = if (currentLang == "ru") "en" else "ru"
         
-        val locale = java.util.Locale(newLang)
-        java.util.Locale.setDefault(locale)
-        
-        val resources = requireContext().resources
-        val config = resources.configuration
-        config.setLocale(locale)
-        
-        // Для Android 13+ (API 33) и выше используем специальный API
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            requireActivity().getSystemService(android.app.LocaleManager::class.java)
-                .applicationLocales = android.os.LocaleList(locale)
-        } else {
-            // Для старых версий
-            context?.createConfigurationContext(config)
-            resources.updateConfiguration(config, resources.displayMetrics)
+        // Используем современный способ переключения (работает на всех версиях Android)
+        val appLocale: androidx.core.os.LocaleListCompat = androidx.core.os.LocaleListCompat.forLanguageTags(newLang)
+        androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(appLocale)
+    }
+
+    // Метод для показа диалога подтверждения удаления напоминания
+    private fun showReminderDialog(track: Track) {
+        val timeMillis = mainViewModel.reminderTimes.value[track.id] ?: return
+        val calendar = java.util.Calendar.getInstance().apply { this.timeInMillis = timeMillis }
+        val dateStr = android.text.format.DateFormat.getDateFormat(requireContext()).format(calendar.time)
+        val timeStr = android.text.format.DateFormat.getTimeFormat(requireContext()).format(calendar.time)
+
+        com.example.andrfindmusicapp.utils.DialogHelper.showReminderDeleteDialog(
+            requireContext(),
+            dateStr,
+            timeStr
+        ) {
+            mainViewModel.removeReminder(track.id)
+            android.widget.Toast.makeText(requireContext(), R.string.reminder_removed, android.widget.Toast.LENGTH_SHORT).show()
         }
-        
-        activity?.recreate()
     }
 
     // Метод для настройки RecyclerView и его адаптера
@@ -123,6 +130,9 @@ class HomeFragment : Fragment() {
             },
             onFavoriteClick = { track ->
                 mainViewModel.toggleFavorite(track)
+            },
+            onReminderClick = { track ->
+                showReminderDialog(track)
             }
         )
         binding.mainRecycler.adapter = adapter
@@ -142,7 +152,7 @@ class HomeFragment : Fragment() {
         })
     }
 
-    // Метод для настройки поисковой строки по образцу из FindAFilm
+    // Метод для настройки поисковой строки
     private fun setupSearchView() {
         binding.searchViewHome.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             // Отрабатывает при нажатии кнопки "поиск" на клавиатуре
@@ -177,6 +187,12 @@ class HomeFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             mainViewModel.favoriteIds.collectLatest { favIds ->
                 adapter.updateFavorites(favIds)
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainViewModel.reminderIds.collectLatest { remIds ->
+                adapter.updateReminders(remIds)
             }
         }
     }

@@ -1,78 +1,52 @@
 package com.example.andrfindmusicapp.ui.player
 
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.SeekBar
-import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import coil.load
 import com.example.andrfindmusicapp.R
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.FragmentPlayerBinding
 import com.example.andrfindmusicapp.ui.main.MainViewModel
-import com.example.andrfindmusicapp.ui.player.adapter.SmallPlaylistAdapter
+import com.example.andrfindmusicapp.ui.player.adapter.PlaylistAdapter
 import com.example.andrfindmusicapp.utils.TimeUtils
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
-// Класс для отображения экрана плеера и управления воспроизведением
+// Класс для фрагмента плеера, отвечающего за отображение текущего трека и управление воспроизведением
 @AndroidEntryPoint
 class PlayerFragment : Fragment() {
     private var _binding: FragmentPlayerBinding? = null
     private val binding get() = _binding!!
 
     private val mainViewModel: MainViewModel by activityViewModels()
-    private val playerViewModel: PlayerViewModel by activityViewModels()
+    private lateinit var playlistAdapter: PlaylistAdapter
     
-    private lateinit var smallPlaylistAdapter: SmallPlaylistAdapter
-    private var currentToast: Toast? = null
-    
-    @javax.inject.Inject
-    lateinit var localTrackProvider: com.example.andrfindmusicapp.data.local.LocalTrackProvider
-    
-    private val handler = Handler(Looper.getMainLooper())
-    
-    // Регистратор для запроса разрешения на запись
+    // Флаг для предотвращения прыжков SeekBar при перемотке
+    private var isUserSeeking = false
+
+    // Обработчик запроса разрешений для скачивания
     private val requestPermissionLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            mainViewModel.currentTrack.value?.let { downloadTrack(it) }
-        } else {
-            showToast(R.string.download_failed)
-        }
-    }
-
-    // Метод для вывода всплывающих уведомлений с автоматической отменой предыдущих
-    private fun showToast(messageResId: Int, vararg args: Any) {
-        currentToast?.cancel()
-        val message = if (args.isEmpty()) getString(messageResId) else getString(messageResId, *args)
-        currentToast = Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT)
-        currentToast?.show()
-    }
-
-    private val updateSeekBarTask = object : Runnable {
-        override fun run() {
-            _binding?.let { b ->
-                mainViewModel.getController()?.let { p ->
-                    val currentPos = p.currentPosition
-                    b.seekBar.progress = currentPos.toInt()
-                    b.tvCurrentTime.text = TimeUtils.formatTime(currentPos)
-                    handler.postDelayed(this, 1000)
-                }
+            mainViewModel.currentTrack.value?.let { track ->
+                mainViewModel.downloadTrack(track)
+                android.widget.Toast.makeText(requireContext(), R.string.download_started, android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
 
+    // Метод для создания View и инициализации binding
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -82,316 +56,364 @@ class PlayerFragment : Fragment() {
         return binding.root
     }
 
+    // Метод для настройки логики фрагмента после создания View
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
         setupRecyclerView()
-        setupObservers()
-
-        // Если пришли с конкретным треком (например, из поиска)
-        val trackFromArgs = arguments?.getSerializable("track") as? Track
-        trackFromArgs?.let {
-            mainViewModel.playTrack(it)
-        }
-
         setupListeners()
+        observeViewModel()
+        startSeekBarUpdate()
     }
 
-    // Метод для инициализации наблюдателей за LiveData и Flow
-    private fun setupObservers() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                // Слушаем текущий трек
-                launch {
-                    mainViewModel.currentTrack.collectLatest { track ->
-                        track?.let {
-                            updateUI(it)
-                            smallPlaylistAdapter.setCurrentTrack(it.id)
-                            playerViewModel.clearLyrics()
-                            binding.lyricsContainer.visibility = View.GONE
-                            binding.rvSmallPlaylist.visibility = View.VISIBLE
-                        }
-                    }
-                }
-
-                // Слушаем текст песни
-                launch {
-                    playerViewModel.lyrics.collectLatest { lyrics ->
-                        if (lyrics != null) {
-                            binding.tvLyrics.text = lyrics
-                        } else if (playerViewModel.isLyricsLoading.value.not() && binding.lyricsContainer.visibility == View.VISIBLE) {
-                            binding.tvLyrics.text = getString(R.string.no_lyrics_found)
-                        }
-                    }
-                }
-
-                // Слушаем состояние загрузки текста
-                launch {
-                    playerViewModel.isLyricsLoading.collectLatest { isLoading ->
-                        if (isLoading) {
-                            binding.tvLyrics.text = getString(R.string.loading_lyrics)
-                        }
-                    }
-                }
-
-                // Слушаем статус избранного для текущего трека
-                launch {
-                    kotlinx.coroutines.flow.combine(
-                        mainViewModel.currentTrack,
-                        mainViewModel.favoriteIds
-                    ) { track, favIds ->
-                        track?.id?.let { id -> favIds.contains(id) } ?: false
-                    }.collectLatest { isFav ->
-                        binding.detailsFavorite.setImageResource(
-                            if (isFav) R.drawable.ic_star else R.drawable.ic_star_border
-                        )
-                    }
-                }
-
-                // Слушаем состояние воспроизведения (Play/Pause)
-                launch {
-                    mainViewModel.isPlaying.collectLatest { isPlaying ->
-                        binding.btnPlayPause.setImageResource(
-                            if (isPlaying) android.R.drawable.ic_media_pause 
-                            else android.R.drawable.ic_media_play
-                        )
-                        if (isPlaying) handler.post(updateSeekBarTask)
-                        else handler.removeCallbacks(updateSeekBarTask)
-                    }
-                }
-
-                // Слушаем плейлист
-                launch {
-                    mainViewModel.playlist.collectLatest { tracks ->
-                        smallPlaylistAdapter.updateData(tracks)
-                    }
-                }
-
-                // Слушаем состояние таймера для иконки
-                launch {
-                    mainViewModel.sleepTimerManager.remainingTime.observe(viewLifecycleOwner) { remaining ->
-                        binding.btnSleepTimer.setImageResource(
-                            if (remaining > 0) R.drawable.ic_alarm_on else R.drawable.ic_alarm_off
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    // Метод для настройки списка (RecyclerView) воспроизведения
+    // Метод для настройки списка (RecyclerView) очереди воспроизведения
     private fun setupRecyclerView() {
-        smallPlaylistAdapter = SmallPlaylistAdapter { clickedTrack ->
-            mainViewModel.playTrack(clickedTrack)
-        }
-        binding.rvSmallPlaylist.apply {
-            adapter = smallPlaylistAdapter
-            isNestedScrollingEnabled = true
-            setHasFixedSize(true)
-        }
+        playlistAdapter = PlaylistAdapter(
+            onItemClick = { track ->
+                mainViewModel.playTrackWithPlaylist(track, mainViewModel.playlist.value)
+            },
+            onDeleteClick = { track ->
+                mainViewModel.removeFromPlaylist(track)
+            }
+        )
+        binding.rvSmallPlaylist.adapter = playlistAdapter
     }
 
-    // Метод для настройки слушателей нажатий на кнопки
+    // Метод для настройки обработчиков кликов по элементам интерфейса
     private fun setupListeners() {
-        binding.btnPlayPause.setOnClickListener {
-            mainViewModel.togglePlayPause()
-        }
-
-        binding.btnNext.setOnClickListener {
-            mainViewModel.skipToNext()
-        }
-
-        binding.btnPrev.setOnClickListener {
-            mainViewModel.skipToPrevious()
-        }
-
-        binding.seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) mainViewModel.seekTo(progress.toLong())
+        with(binding) {
+            btnPlayPause.setOnClickListener { mainViewModel.togglePlayPause() }
+            
+            btnNext.setOnClickListener { 
+                if (mainViewModel.favoriteIds.value.isEmpty()) {
+                    android.widget.Toast.makeText(requireContext(), R.string.playlist_add_hint, android.widget.Toast.LENGTH_SHORT).show()
+                }
+                mainViewModel.skipToNext() 
             }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
 
-        binding.detailsFavorite.setOnClickListener {
-            mainViewModel.currentTrack.value?.let { track ->
-                mainViewModel.toggleFavorite(track)
+            btnPrev.setOnClickListener { 
+                if (mainViewModel.favoriteIds.value.isEmpty()) {
+                    android.widget.Toast.makeText(requireContext(), R.string.playlist_add_hint, android.widget.Toast.LENGTH_SHORT).show()
+                }
+                mainViewModel.skipToPrevious() 
             }
-        }
-
-        binding.btnSleepTimer.setOnClickListener {
-            showSleepTimerDialog()
-        }
-
-        binding.btnShare.setOnClickListener {
-            mainViewModel.currentTrack.value?.let { track ->
-                shareTrack(track)
+            
+            detailsFavorite.setOnClickListener {
+                mainViewModel.currentTrack.value?.let { mainViewModel.toggleFavorite(it) }
             }
-        }
 
-        binding.btnDownload.setOnClickListener {
-            mainViewModel.currentTrack.value?.let { track ->
-                checkPermissionAndDownload(track)
-            }
-        }
-
-        binding.btnDeletePlayer.setOnClickListener {
-            mainViewModel.currentTrack.value?.let { track ->
-                showDeleteConfirmation(track)
-            }
-        }
-
-        binding.btnLyrics.setOnClickListener {
-            if (binding.lyricsContainer.visibility == View.VISIBLE) {
-                binding.lyricsContainer.visibility = View.GONE
-                binding.rvSmallPlaylist.visibility = View.VISIBLE
-            } else {
-                binding.lyricsContainer.visibility = View.VISIBLE
-                binding.rvSmallPlaylist.visibility = View.GONE
+            btnReminder.setOnClickListener {
                 mainViewModel.currentTrack.value?.let { track ->
-                    if (playerViewModel.lyrics.value == null) {
-                        playerViewModel.loadLyrics(track.id)
+                    if (mainViewModel.reminderIds.value.contains(track.id)) {
+                        showRemoveReminderDialog(track)
+                    } else {
+                        showDateTimePicker(track)
                     }
                 }
             }
-        }
-    }
 
-    // Метод для проверки разрешений и запуска скачивания трека
-    private fun checkPermissionAndDownload(track: Track) {
-        if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.P) {
-            val permission = android.Manifest.permission.WRITE_EXTERNAL_STORAGE
-            if (androidx.core.content.ContextCompat.checkSelfPermission(
-                    requireContext(),
-                    permission
-                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) {
-                downloadTrack(track)
-            } else {
-                requestPermissionLauncher.launch(permission)
+            btnDownload.setOnClickListener {
+                mainViewModel.currentTrack.value?.let { track ->
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        // На Android 10+ (API 29+) разрешение не требуется для сохранения в Music
+                        if (mainViewModel.downloadTrack(track)) {
+                            android.widget.Toast.makeText(requireContext(), R.string.download_started, android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            android.widget.Toast.makeText(requireContext(), R.string.download_already_exists, android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        // На старых версиях проверяем разрешение
+                        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                                requireContext(),
+                                android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        ) {
+                            if (mainViewModel.downloadTrack(track)) {
+                                android.widget.Toast.makeText(requireContext(), R.string.download_started, android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                android.widget.Toast.makeText(requireContext(), R.string.download_already_exists, android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            requestPermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                        }
+                    }
+                }
             }
-        } else {
-            downloadTrack(track)
+
+            btnShare.setOnClickListener {
+                mainViewModel.currentTrack.value?.let { track ->
+                    shareTrack(track)
+                }
+            }
+
+            btnSleepTimer.setOnClickListener {
+                showSleepTimerDialog()
+            }
+
+            seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        mainViewModel.seekTo(progress.toLong())
+                    }
+                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) { isUserSeeking = true }
+                override fun onStopTrackingTouch(seekBar: SeekBar?) { isUserSeeking = false }
+            })
         }
     }
 
-    // Метод для шаринга информации о треке в другие приложения
+    // Метод для подписки на изменения данных в ViewModel
+    private fun observeViewModel() {
+        // Объединяем наблюдение за текущим треком, избранным и напоминаниями
+        viewLifecycleOwner.lifecycleScope.launch {
+            kotlinx.coroutines.flow.combine(
+                mainViewModel.currentTrack,
+                mainViewModel.favoriteIds,
+                mainViewModel.reminderIds
+            ) { track, favoriteIds, reminderIds ->
+                Triple(track, favoriteIds, reminderIds)
+            }.collectLatest { (track, favoriteIds, reminderIds) ->
+                track?.let { 
+                    setupUI(it)
+                    playlistAdapter.setCurrentTrack(it.id)
+                    
+                    val isFavorite = favoriteIds.contains(it.id)
+                    binding.detailsFavorite.setImageResource(
+                        if (isFavorite) R.drawable.ic_star else R.drawable.ic_star_border
+                    )
+
+                    val hasReminder = reminderIds.contains(it.id)
+                    binding.btnReminder.setImageResource(
+                        if (hasReminder) R.drawable.ic_notifications_active else R.drawable.ic_notifications_none
+                    )
+                    // Всегда синий цвет иконки (как у звездочки)
+                    binding.btnReminder.imageTintList = android.content.res.ColorStateList.valueOf(
+                        androidx.core.content.ContextCompat.getColor(requireContext(), R.color.colorPrimaryDark)
+                    )
+                    // Всегда светлый (белый) фон для кнопки
+                    binding.btnReminder.backgroundTintList = android.content.res.ColorStateList.valueOf(
+                        android.graphics.Color.WHITE
+                    )
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainViewModel.playlist.collectLatest { tracks ->
+                playlistAdapter.updateData(tracks)
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainViewModel.isPlaying.collectLatest { isPlaying ->
+                binding.btnPlayPause.setImageResource(
+                    if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+                )
+            }
+        }
+
+        // Наблюдение за состоянием таймера сна
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainViewModel.sleepTimerManager.isTimerRunning.collectLatest { isRunning ->
+                binding.btnSleepTimer.setImageResource(
+                    if (isRunning) R.drawable.ic_alarm_on else R.drawable.ic_alarm_off
+                )
+                binding.btnSleepTimer.imageTintList = android.content.res.ColorStateList.valueOf(
+                    ContextCompat.getColor(
+                        requireContext(),
+                        if (isRunning) R.color.colorPrimaryDark else R.color.player_icon_tint
+                    )
+                )
+            }
+        }
+    }
+
+    // Метод для обновления UI данными трека
+    private fun setupUI(track: Track) {
+        binding.detailsTitle.text = track.name
+        binding.detailsArtist.text = track.artistName
+        binding.detailsPoster.load(track.imageUrl) {
+            crossfade(true)
+            placeholder(R.drawable.ic_launcher_background)
+        }
+        
+        // Показываем индикатор только для локальных треков
+        val isLocal = track.audioUrl?.startsWith("content://") == true || track.audioUrl?.startsWith("file://") == true
+        binding.btnLyrics.visibility = if (isLocal) View.VISIBLE else View.GONE
+        
+        // Обновляем максимальное значение SeekBar при смене трека
+        binding.seekBar.max = (track.duration ?: 0) * 1000 // Jamendo дает в секундах
+    }
+
+    // Метод для того, чтобы поделиться информацией о треке
     private fun shareTrack(track: Track) {
         val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = "text/plain"
-            val trackName = track.name ?: "Unknown"
-            val artistName = track.artistName ?: "Unknown Artist"
-            putExtra(android.content.Intent.EXTRA_SUBJECT, trackName)
-            val text = getString(R.string.share_text, trackName, artistName)
-            putExtra(android.content.Intent.EXTRA_TEXT, "$text\n${track.audioUrl ?: ""}")
+            val text = getString(R.string.share_text, track.name, track.artistName)
+            putExtra(android.content.Intent.EXTRA_TEXT, text)
         }
         startActivity(android.content.Intent.createChooser(shareIntent, getString(R.string.share_content_description)))
     }
 
-    // Метод для постановки трека в очередь загрузки DownloadManager
-    private fun downloadTrack(track: Track) {
-        val url = track.audioUrl ?: return
-        try {
-            val trackName = track.name ?: "Unknown"
-            val artistName = track.artistName ?: "Unknown Artist"
-            val fileName = "$trackName - $artistName.mp3".replace(Regex("[\\\\/:*?\"<>|]"), "_")
-            
-            val request = android.app.DownloadManager.Request(android.net.Uri.parse(url))
-                .setTitle(trackName)
-                .setDescription(artistName)
-                .setMimeType("audio/mpeg")
-                .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, fileName)
-            
-            if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.P) {
-                request.allowScanningByMediaScanner()
-            }
+    // Метод для показа выбора даты и времени напоминания
+    private fun showDateTimePicker(track: Track) {
+        val calendar = Calendar.getInstance()
+        val datePicker = android.app.DatePickerDialog(
+            requireContext(),
+            { _, year, month, dayOfMonth ->
+                calendar.set(Calendar.YEAR, year)
+                calendar.set(Calendar.MONTH, month)
+                calendar.set(Calendar.DAY_OF_MONTH, dayOfMonth)
 
-            val downloadManager = requireContext().getSystemService(android.content.Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
-            downloadManager.enqueue(request)
-            
-            showToast(R.string.download_started)
-        } catch (e: Exception) {
-            showToast(R.string.download_failed)
-        }
-    }
+                android.app.TimePickerDialog(
+                    requireContext(),
+                    { _, hourOfDay, minute ->
+                        calendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
+                        calendar.set(Calendar.MINUTE, minute)
+                        calendar.set(Calendar.SECOND, 0)
 
-    // Метод для отображения диалога выбора времени таймера сна
-    private fun showSleepTimerDialog() {
-        val options = arrayOf(
-            getString(R.string.minutes_5),
-            getString(R.string.minutes_15),
-            getString(R.string.minutes_30),
-            getString(R.string.minutes_60),
-            getString(R.string.timer_off)
+                        if (calendar.timeInMillis <= System.currentTimeMillis()) {
+                            android.widget.Toast.makeText(requireContext(), "Выберите время в будущем", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            mainViewModel.setReminder(track, calendar.timeInMillis)
+                            val dateStr = android.text.format.DateFormat.getDateFormat(requireContext()).format(calendar.time)
+                            val timeStr = android.text.format.DateFormat.getTimeFormat(requireContext()).format(calendar.time)
+                            android.widget.Toast.makeText(requireContext(), getString(R.string.reminder_set, "$dateStr $timeStr"), android.widget.Toast.LENGTH_SHORT).show()
+                            
+                            // Schedule the notification as a reminder
+                            binding.root.postDelayed({
+                                // Проверяем, не удалили ли напоминание к этому моменту
+                                if (mainViewModel.reminderIds.value.contains(track.id)) {
+                                    com.example.andrfindmusicapp.utils.NotificationHelper.showRecommendationNotification(requireContext(), track, isReminder = true)
+                                }
+                            }, calendar.timeInMillis - System.currentTimeMillis())
+                        }
+                    },
+                    calendar.get(Calendar.HOUR_OF_DAY),
+                    calendar.get(Calendar.MINUTE),
+                    true
+                ).show()
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
         )
-        val minutes = intArrayOf(5, 15, 30, 60, 0)
-        val currentSelected = mainViewModel.sleepTimerManager.selectedMinutes
-        val checkedItem = minutes.indexOf(currentSelected).let { if (it == -1) 4 else it }
-
-        androidx.appcompat.app.AlertDialog.Builder(requireContext(), R.style.TimerDialogTheme)
-            .setTitle(R.string.sleep_timer_title)
-            .setSingleChoiceItems(options, checkedItem) { dialog, which ->
-                val selectedMinutes = minutes[which]
-                if (selectedMinutes > 0) {
-                    mainViewModel.sleepTimerManager.startTimer(selectedMinutes) {
-                        mainViewModel.getController()?.pause()
-                    }
-                    showToast(R.string.timer_set, selectedMinutes)
-                } else {
-                    mainViewModel.sleepTimerManager.stopTimer()
-                    showToast(R.string.timer_stopped)
-                }
-                dialog.dismiss()
-            }
-            .show()
+        datePicker.show()
     }
 
-    // Метод для отображения подтверждения удаления локального трека
-    private fun showDeleteConfirmation(track: Track) {
-        androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle(R.string.delete_track_title)
-            .setMessage(getString(R.string.delete_track_message, track.name ?: "Unknown"))
-            .setPositiveButton(R.string.delete_confirm) { _, _ ->
-                deleteLocalTrack(track)
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
+    // Метод для показа диалога удаления напоминания
+    private fun showRemoveReminderDialog(track: Track) {
+        val timeMillis = mainViewModel.reminderTimes.value[track.id] ?: return
+        val calendar = Calendar.getInstance().apply { this.timeInMillis = timeMillis }
+        val dateStr = android.text.format.DateFormat.getDateFormat(requireContext()).format(calendar.time)
+        val timeStr = android.text.format.DateFormat.getTimeFormat(requireContext()).format(calendar.time)
 
-    // Метод для удаления локального файла трека из памяти устройства
-    private fun deleteLocalTrack(track: Track) {
-        if (localTrackProvider.deleteTrack(track)) {
-            mainViewModel.skipToNext()
-            showToast(R.string.track_deleted)
-        } else {
-            showToast(R.string.delete_failed)
+        com.example.andrfindmusicapp.utils.DialogHelper.showReminderDeleteDialog(
+            requireContext(),
+            dateStr,
+            timeStr
+        ) {
+            mainViewModel.removeReminder(track.id)
+            android.widget.Toast.makeText(requireContext(), R.string.reminder_removed, android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Метод для обновления элементов UI информацией о текущем треке
-    private fun updateUI(track: Track) {
-        binding.detailsTitle.text = track.name ?: "Unknown"
-        binding.detailsArtist.text = track.artistName ?: "Unknown Artist"
-        binding.detailsPoster.load(track.imageUrl) {
-            crossfade(true)
-            placeholder(android.R.drawable.ic_menu_gallery)
-            error(android.R.drawable.ic_menu_gallery)
-        }
+    // Метод для показа диалога настройки таймера сна
+    private fun showSleepTimerDialog() {
+        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_sleep_timer, null)
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setView(dialogView)
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        val isDarkTheme = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
         
-        val duration = track.duration ?: 0
-        binding.seekBar.max = duration * 1000
-        binding.tvTotalTime.text = TimeUtils.formatSeconds(duration)
+        val bgColor = if (isDarkTheme) R.color.dark_gradient_bottom else R.color.timer_dialog_bg
+        val textColor = if (isDarkTheme) R.color.timer_dialog_bg else R.color.timer_dialog_text
+        val btnColor = if (isDarkTheme) R.color.colorAccent else R.color.player_icon_tint
 
-        val isLocal = track.audioUrl?.startsWith("content://") == true || track.audioUrl?.startsWith("file://") == true
-        binding.btnDeletePlayer.visibility = if (isLocal) View.VISIBLE else View.GONE
-        binding.btnDownload.visibility = if (isLocal) View.GONE else View.VISIBLE
-        binding.btnLyrics.visibility = if (isLocal) View.VISIBLE else View.GONE
+        // Применяем цвета к фону диалога
+        val background = dialogView.background as android.graphics.drawable.GradientDrawable
+        background.setColor(ContextCompat.getColor(requireContext(), bgColor))
+
+        // Применяем цвета к тексту
+        val title = dialogView.findViewById<android.widget.TextView>(R.id.tv_dialog_title)
+        title.setTextColor(ContextCompat.getColor(requireContext(), textColor))
+
+        val rgOptions = dialogView.findViewById<android.widget.RadioGroup>(R.id.rg_timer_options)
+        
+        // Пре-селект текущего значения таймера
+        val currentMinutes = mainViewModel.sleepTimerManager.lastSetMinutes
+        if (currentMinutes > 0) {
+            val radioButtonId = when (currentMinutes) {
+                10 -> R.id.rb_10
+                15 -> R.id.rb_15
+                20 -> R.id.rb_20
+                25 -> R.id.rb_25
+                30 -> R.id.rb_30
+                else -> -1
+            }
+            if (radioButtonId != -1) {
+                rgOptions.check(radioButtonId)
+            }
+        } else {
+            rgOptions.check(R.id.rb_off)
+        }
+
+        for (i in 0 until rgOptions.childCount) {
+            val rb = rgOptions.getChildAt(i) as android.widget.RadioButton
+            rb.setTextColor(ContextCompat.getColor(requireContext(), textColor))
+            rb.buttonTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(requireContext(), btnColor))
+        }
+
+        val btnCancel = dialogView.findViewById<android.widget.Button>(R.id.btn_cancel)
+        btnCancel.setTextColor(ContextCompat.getColor(requireContext(), btnColor))
+
+        rgOptions.setOnCheckedChangeListener { _, checkedId ->
+            val minutes = when (checkedId) {
+                R.id.rb_10 -> 10
+                R.id.rb_15 -> 15
+                R.id.rb_20 -> 20
+                R.id.rb_25 -> 25
+                R.id.rb_30 -> 30
+                R.id.rb_off -> -1
+                else -> 0
+            }
+
+            if (minutes == -1) {
+                mainViewModel.stopSleepTimer()
+                android.widget.Toast.makeText(requireContext(), R.string.timer_stopped, android.widget.Toast.LENGTH_SHORT).show()
+            } else if (minutes > 0) {
+                mainViewModel.startSleepTimer(minutes)
+                android.widget.Toast.makeText(requireContext(), getString(R.string.timer_set, minutes), android.widget.Toast.LENGTH_SHORT).show()
+            }
+            dialog.dismiss()
+        }
+
+        btnCancel.setOnClickListener { dialog.dismiss() }
+        dialog.show()
     }
 
-    override fun onStop() {
-        super.onStop()
-        handler.removeCallbacks(updateSeekBarTask)
+    // Метод для циклического обновления SeekBar в зависимости от прогресса воспроизведения
+    private fun startSeekBarUpdate() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            while (true) {
+                if (!isUserSeeking) {
+                    val controller = mainViewModel.getController()
+                    controller?.let {
+                        binding.seekBar.progress = it.currentPosition.toInt()
+                        binding.tvCurrentTime.text = TimeUtils.formatMillis(it.currentPosition)
+                        
+                        if (it.duration > 0) {
+                            binding.seekBar.max = it.duration.toInt()
+                            binding.tvTotalTime.text = TimeUtils.formatMillis(it.duration)
+                        }
+                    }
+                }
+                delay(1000)
+            }
+        }
     }
 
     override fun onDestroyView() {

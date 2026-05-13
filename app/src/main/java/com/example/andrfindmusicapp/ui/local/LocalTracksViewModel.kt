@@ -1,50 +1,99 @@
 package com.example.andrfindmusicapp.ui.local
 
+import android.content.ContentUris
+import android.content.Context
+import android.provider.MediaStore
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.andrfindmusicapp.data.local.LocalTrackProvider
 import com.example.andrfindmusicapp.data.model.Track
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
-// ViewModel для управления списком локальных треков
 @HiltViewModel
 class LocalTracksViewModel @Inject constructor(
-    private val localTrackProvider: LocalTrackProvider
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    private val _localTracks = MutableStateFlow<List<Track>>(emptyList())
-    val localTracks = _localTracks.asStateFlow()
+    private val _localTracks = MutableLiveData<List<Track>>()
+    val localTracks: LiveData<List<Track>> = _localTracks
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading = _isLoading.asStateFlow()
+    private val _isLoading = MutableLiveData<Boolean>()
+    val isLoading: LiveData<Boolean> = _isLoading
 
-    // Метод для загрузки локальных треков в фоновом потоке
     fun loadLocalTracks() {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             _isLoading.value = true
-            try {
-                val tracks = localTrackProvider.fetchLocalTracks()
-                _localTracks.value = tracks
-            } catch (e: Exception) {
-                _localTracks.value = emptyList()
-            } finally {
-                _isLoading.value = false
-            }
+            val tracks = fetchMusicFiles()
+            _localTracks.value = tracks
+            _isLoading.value = false
         }
     }
 
-    // Метод для удаления трека
-    fun deleteTrack(track: Track) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val success = localTrackProvider.deleteTrack(track)
-            if (success) {
-                loadLocalTracks() // Перезагружаем список после удаления
+    private suspend fun fetchMusicFiles(): List<Track> = withContext(Dispatchers.IO) {
+        val tracksList = mutableListOf<Track>()
+        val projection = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.ALBUM_ID
+        )
+
+        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+        
+        context.contentResolver.query(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            null,
+            "${MediaStore.Audio.Media.DATE_ADDED} DESC"
+        )?.use { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+            val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+            val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+            val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+            val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(idColumn)
+                val title = cursor.getString(titleColumn)
+                val artist = cursor.getString(artistColumn)
+                val album = cursor.getString(albumColumn)
+                val duration = cursor.getInt(durationColumn) / 1000 // Convert to seconds
+                val albumId = cursor.getLong(albumIdColumn)
+
+                val contentUri = ContentUris.withAppendedId(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    id
+                )
+                
+                // Формируем URI обложки альбома
+                val albumArtUri = ContentUris.withAppendedId(
+                    android.net.Uri.parse("content://media/external/audio/albumart"),
+                    albumId
+                ).toString()
+
+                tracksList.add(
+                    Track(
+                        id = id.toString(),
+                        name = title,
+                        artistName = artist,
+                        albumName = album,
+                        duration = duration,
+                        audioUrl = contentUri.toString(),
+                        imageUrl = albumArtUri
+                    )
+                )
             }
         }
+        tracksList
     }
 }

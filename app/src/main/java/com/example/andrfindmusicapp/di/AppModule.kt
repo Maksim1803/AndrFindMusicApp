@@ -5,8 +5,6 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import com.example.andrfindmusicapp.data.remote.JamendoService
-import com.example.andrfindmusicapp.data.remote.RetrofitClient
 import com.example.andrfindmusicapp.utils.PreferenceProvider
 import dagger.Module
 import dagger.Provides
@@ -19,13 +17,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
-
-    // Метод для предоставления сервиса Jamendo
-    @Provides
-    @Singleton
-    fun provideJamendoService(): JamendoService {
-        return RetrofitClient.jamendoService
-    }
 
     // Метод для предоставления провайдера настроек
     @Provides

@@ -7,18 +7,15 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
-import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import com.example.andrfindmusicapp.R
+import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.FragmentLocalTracksBinding
 import com.example.andrfindmusicapp.ui.home.adapter.HomeAdapter
 import com.example.andrfindmusicapp.ui.main.MainViewModel
@@ -26,7 +23,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-// Фрагмент для отображения и воспроизведения локальных аудиофайлов с устройства
+// Класс для фрагмента, отображающего локальные (скачанные) треки на устройстве
 @AndroidEntryPoint
 class LocalTracksFragment : Fragment() {
     private var _binding: FragmentLocalTracksBinding? = null
@@ -34,93 +31,128 @@ class LocalTracksFragment : Fragment() {
 
     private val viewModel: LocalTracksViewModel by viewModels()
     private val mainViewModel: MainViewModel by activityViewModels()
-    
+
     private lateinit var adapter: HomeAdapter
 
-    // Лаунчер для запроса разрешений на чтение медиафайлов
+    // Обработчик запроса разрешений на чтение памяти
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
             viewModel.loadLocalTracks()
-        } else {
-            Toast.makeText(requireContext(), "Разрешение отклонено", Toast.LENGTH_SHORT).show()
         }
     }
 
+    // Метод для создания View и инициализации binding
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
+        inflater: LayoutInflater, container: ViewGroup?,
+        savedInstanceState: Bundle?
     ): View {
         _binding = FragmentLocalTracksBinding.inflate(inflater, container, false)
         return binding.root
     }
 
+    // Метод для настройки фрагмента после создания View
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupRecyclerView()
-        setupObservers()
-        checkPermissions()
+        observeViewModel()
+        checkPermissionAndLoad()
     }
 
+    // Метод для настройки RecyclerView и его адаптера для локальных треков
     private fun setupRecyclerView() {
         adapter = HomeAdapter(
             onItemClick = { track ->
-                mainViewModel.playTrack(track)
+                mainViewModel.playTrackWithPlaylist(track, viewModel.localTracks.value ?: emptyList())
                 findNavController().navigate(R.id.navigation_player)
             },
             onFavoriteClick = { track ->
                 mainViewModel.toggleFavorite(track)
             },
+            onReminderClick = { track ->
+                showReminderDialog(track)
+            },
             onDeleteClick = { track ->
-                // Показываем подтверждение удаления
-                androidx.appcompat.app.AlertDialog.Builder(requireContext(), R.style.TimerDialogTheme)
-                    .setTitle("Удалить файл?")
-                    .setMessage("Вы действительно хотите удалить ${track.name} с устройства?")
-                    .setPositiveButton("Удалить") { _, _ ->
-                        viewModel.deleteTrack(track)
-                        Toast.makeText(requireContext(), "Трек удален", Toast.LENGTH_SHORT).show()
-                    }
-                    .setNegativeButton("Отмена", null)
-                    .show()
+                showDeleteConfirmDialog(track)
             }
         )
         binding.rvLocalTracks.adapter = adapter
     }
 
-    private fun setupObservers() {
+    // Метод для показа диалога подтверждения удаления локального файла
+    private fun showDeleteConfirmDialog(track: Track) {
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle(R.string.delete_track_title)
+            .setMessage(getString(R.string.delete_track_message, track.name))
+            .setPositiveButton(R.string.delete_confirm) { _, _ ->
+                if (mainViewModel.deleteTrack(track)) {
+                    android.widget.Toast.makeText(requireContext(), R.string.track_deleted, android.widget.Toast.LENGTH_SHORT).show()
+                    viewModel.loadLocalTracks() // Обновляем список
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    // Метод для показа диалога удаления напоминания
+    private fun showReminderDialog(track: Track) {
+        val timeMillis = mainViewModel.reminderTimes.value[track.id] ?: return
+        val calendar = java.util.Calendar.getInstance().apply { this.timeInMillis = timeMillis }
+        val dateStr = android.text.format.DateFormat.getDateFormat(requireContext()).format(calendar.time)
+        val timeStr = android.text.format.DateFormat.getTimeFormat(requireContext()).format(calendar.time)
+
+        com.example.andrfindmusicapp.utils.DialogHelper.showReminderDeleteDialog(
+            requireContext(),
+            dateStr,
+            timeStr
+        ) {
+            mainViewModel.removeReminder(track.id)
+            android.widget.Toast.makeText(requireContext(), R.string.reminder_removed, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Метод для подписки на изменения данных во ViewModel
+    private fun observeViewModel() {
+        viewModel.localTracks.observe(viewLifecycleOwner) { tracks ->
+            adapter.updateData(tracks)
+            binding.tvNoTracks.visibility = if (tracks.isEmpty()) View.VISIBLE else View.GONE
+        }
+
+        viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
+            binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+        }
+
+        // Наблюдаем за избранным, чтобы звездочки обновлялись
         viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                launch {
-                    viewModel.localTracks.collectLatest { tracks ->
-                        adapter.updateData(tracks)
-                        binding.tvNoTracks.isVisible = tracks.isEmpty() && !viewModel.isLoading.value
-                    }
-                }
-                launch {
-                    mainViewModel.favoriteIds.collectLatest { favIds ->
-                        adapter.updateFavorites(favIds)
-                    }
-                }
-                launch {
-                    viewModel.isLoading.collectLatest { isLoading ->
-                        binding.progressBar.isVisible = isLoading
-                    }
-                }
+            mainViewModel.favoriteIds.collectLatest { favIds ->
+                adapter.updateFavorites(favIds)
+            }
+        }
+
+        // Наблюдаем за напоминаниями, чтобы колокольчики обновлялись
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainViewModel.reminderIds.collectLatest { remIds ->
+                adapter.updateReminders(remIds)
             }
         }
     }
 
-    private fun checkPermissions() {
+    // Метод для проверки разрешений и запуска загрузки локальных треков
+    private fun checkPermissionAndLoad() {
         val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_AUDIO
         } else {
             Manifest.permission.READ_EXTERNAL_STORAGE
         }
 
-        if (ContextCompat.checkSelfPermission(requireContext(), permission) == PackageManager.PERMISSION_GRANTED) {
-            viewModel.loadLocalTracks()
-        } else {
-            requestPermissionLauncher.launch(permission)
+        when {
+            ContextCompat.checkSelfPermission(requireContext(), permission) == PackageManager.PERMISSION_GRANTED -> {
+                viewModel.loadLocalTracks()
+            }
+            else -> {
+                requestPermissionLauncher.launch(permission)
+            }
         }
     }
 

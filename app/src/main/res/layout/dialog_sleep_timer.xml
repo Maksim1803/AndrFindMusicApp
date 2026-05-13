@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_dialog_rounded"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:id="@+id/tv_dialog_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="@string/sleep_timer_title"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <RadioGroup
+        android:id="@+id/rg_timer_options"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp">
+
+        <RadioButton
+            android:id="@+id/rb_10"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/minutes_10"
+            android:textSize="16sp" />
+
+        <RadioButton
+            android:id="@+id/rb_15"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/minutes_15"
+            android:textSize="16sp" />
+
+        <RadioButton
+            android:id="@+id/rb_20"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/minutes_20"
+            android:textSize="16sp" />
+
+        <RadioButton
+            android:id="@+id/rb_25"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/minutes_25"
+            android:textSize="16sp" />
+
+        <RadioButton
+            android:id="@+id/rb_30"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/minutes_30"
+            android:textSize="16sp" />
+
+        <RadioButton
+            android:id="@+id/rb_off"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/timer_off"
+            android:textSize="16sp" />
+    </RadioGroup>
+
+    <Button
+        android:id="@+id/btn_cancel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_marginTop="16dp"
+        android:background="@android:color/transparent"
+        android:text="@string/cancel"
+        android:textAllCaps="true" />
+
+</LinearLayout>
