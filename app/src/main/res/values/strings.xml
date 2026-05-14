@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">AndrFindMusicApp</string>
+    <string name="app_name">Music Wave</string>
     <string name="music_poster_content_description">Music poster</string>
     <string name="search_hint">Поиск треков...</string>
     <string name="favorite_icon_content_description">Добавить в избранное</string>
@@ -33,7 +33,7 @@
     <string name="sleep_timer_content_description">Таймер сна</string>
     <string name="share_content_description">Поделиться треком</string>
     <string name="download_content_description">Скачать трек</string>
-    <string name="share_text">Слушаю трек %1$s от %2$s в приложении AndrFindMusic!</string>
+    <string name="share_text">Слушаю трек %1$s от %2$s в приложении Music Wave!</string>
     <string name="download_started">Загрузка началась...</string>
     <string name="download_already_exists">Этот трек уже скачан</string>
     <string name="download_failed">Ошибка загрузки</string>
