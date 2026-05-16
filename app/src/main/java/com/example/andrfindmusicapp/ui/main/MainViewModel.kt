@@ -162,21 +162,16 @@ class MainViewModel @Inject constructor(
 
             val tracksToPlay = if (sortedPlaylist.isEmpty()) listOf(track) else sortedPlaylist
             
-            val preparedTracks = tracksToPlay.map { t ->
-                val localUri = downloadManager.getDownloadedUri(t)
-                if (localUri != null) t.copy(audioUrl = localUri.toString()) else t
-            }
+            _playlist.value = tracksToPlay
+            controller?.setMediaItems(tracksToPlay.map { createMediaItem(it) })
 
-            _playlist.value = preparedTracks
-            controller?.setMediaItems(preparedTracks.map { createMediaItem(it) })
-
-            val index = preparedTracks.indexOfFirst { it.id == track.id }
+            val index = tracksToPlay.indexOfFirst { it.id == track.id }
             if (index != -1) controller?.seekTo(index, 0)
 
             controller?.prepare()
             controller?.play()
             controller?.repeatMode = Player.REPEAT_MODE_ALL
-            _currentTrack.value = preparedTracks.find { it.id == track.id } ?: track
+            _currentTrack.value = tracksToPlay.find { it.id == track.id } ?: track
             preferenceProvider.saveLastState(_currentTrack.value, _playlist.value)
         }
     }

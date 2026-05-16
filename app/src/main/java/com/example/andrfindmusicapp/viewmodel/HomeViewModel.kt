@@ -107,7 +107,7 @@ class HomeViewModel @Inject constructor(
             audioUrl = track.audioUrl ?: "",
             duration = track.duration ?: 0,
             category = category,
-            isFavorite = false // При кэшировании не сбрасываем существующий флаг (OnConflict.REPLACE обработает это, если мы не передадим старое значение, но в нашей схеме лучше аккуратно)
+            isFavorite = false
         )
     }
 
