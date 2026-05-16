@@ -9,6 +9,8 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.andrfindmusicapp.R
 import com.example.andrfindmusicapp.databinding.FragmentCategoriesBinding
+import com.example.andrfindmusicapp.ui.main.MainViewModel
+import androidx.fragment.app.activityViewModels
 import com.example.andrfindmusicapp.ui.categories.adapter.CategoryAdapter
 import com.example.andrfindmusicapp.utils.PreferenceProvider
 
@@ -23,6 +25,8 @@ class CategoriesFragment : Fragment() {
 
     @Inject
     lateinit var preferenceProvider: PreferenceProvider
+
+    private val mainViewModel: MainViewModel by activityViewModels()
 
     // Метод для создания View фрагмента и инициализации binding
     override fun onCreateView(
@@ -49,6 +53,8 @@ class CategoriesFragment : Fragment() {
         val currentCategoryTag = preferenceProvider.getLastCategory()
         
         binding.categoriesRecycler.adapter = CategoryAdapter(categories, currentCategoryTag) { category ->
+            // 0. Проверяем сеть
+            mainViewModel.notifyNoInternet()
             // 1. Сохраняем выбор
             preferenceProvider.saveCategory(category.tag)
             // 2. Переходим на главный экран

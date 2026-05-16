@@ -59,4 +59,8 @@
     <string name="reminder_removed">Reminder removed</string>
     <string name="daily_recommendation_notif_title">Your track of the day!</string>
     <string name="daily_recommendation_notif_text">We picked something special for you</string>
+    <string name="error_no_internet">No internet connection</string>
+    <string name="error_loading">Error loading data</string>
+    <string name="playback_error">Playback error. Check your connection</string>
+    <string name="error_slow_connection">Slow connection. Please wait...</string>
 </resources>

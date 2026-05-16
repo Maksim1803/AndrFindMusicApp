@@ -59,4 +59,8 @@
     <string name="reminder_removed">Напоминание удалено</string>
     <string name="daily_recommendation_notif_title">Ваш трек дня!</string>
     <string name="daily_recommendation_notif_text">Мы подобрали кое-что особенное</string>
+    <string name="error_no_internet">Отсутствует подключение к интернету</string>
+    <string name="error_loading">Ошибка при загрузке данных</string>
+    <string name="playback_error">Ошибка воспроизведения. Проверьте подключение</string>
+    <string name="error_slow_connection">Медленное соединение. Пожалуйста, подождите...</string>
 </resources>

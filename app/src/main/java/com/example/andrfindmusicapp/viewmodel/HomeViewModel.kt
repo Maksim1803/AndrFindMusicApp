@@ -12,6 +12,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import java.util.Locale
 
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,6 +30,9 @@ class HomeViewModel @Inject constructor(
 
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> get() = _isLoading
+
+    private val _networkError = MutableLiveData<Int?>()
+    val networkError: LiveData<Int?> get() = _networkError
 
     // Список для локальной фильтрации (как в FindAFilm)
     private var allTracksCached = listOf<Track>()
@@ -73,8 +77,11 @@ class HomeViewModel @Inject constructor(
     private fun fetchTracksByTag(tag: String) {
         viewModelScope.launch {
             _isLoading.value = true
+            _networkError.value = null
             try {
-                val response = RetrofitClient.jamendoService.getTracksByCategory(tag = tag, offset = currentOffset)
+                val response = withTimeout(5000) {
+                    RetrofitClient.jamendoService.getTracksByCategory(tag = tag, offset = currentOffset)
+                }
                 val domainTracks = response.results ?: emptyList()
                 
                 if (currentOffset == 0) {
@@ -89,8 +96,10 @@ class HomeViewModel @Inject constructor(
                 // Сохраняем в кэш
                 trackDao.upsertCacheTracks(domainTracks.map { mapToEntity(it, tag) })
                 updatePaginationState(domainTracks.size)
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                _networkError.value = com.example.andrfindmusicapp.R.string.error_slow_connection
             } catch (e: Exception) {
-                // Если ошибка (нет интернета), данные из кэша уже на экране
+                _networkError.value = com.example.andrfindmusicapp.R.string.error_no_internet
             } finally {
                 _isLoading.value = false
             }
@@ -138,13 +147,20 @@ class HomeViewModel @Inject constructor(
         
         viewModelScope.launch {
             try {
-                val response = if (currentQuery != null) {
-                    RetrofitClient.jamendoService.searchTracks(query = currentQuery!!, offset = currentOffset)
-                } else {
-                    RetrofitClient.jamendoService.getTracksByCategory(tag = currentTag!!, offset = currentOffset)
+                val response = withTimeout(5000) {
+                    if (currentQuery != null) {
+                        RetrofitClient.jamendoService.searchTracks(query = currentQuery!!, offset = currentOffset)
+                    } else {
+                        RetrofitClient.jamendoService.getTracksByCategory(tag = currentTag!!, offset = currentOffset)
+                    }
                 }
                 
-                val domainTracks = response.results ?: emptyList()
+                val rawTracks = response.results ?: emptyList()
+                val domainTracks = rawTracks.map { it.copy(
+                    audioUrl = it.audioUrl?.replace("https://", "http://"),
+                    imageUrl = it.imageUrl?.replace("https://", "http://")
+                )}
+                
                 _tracks.value = (_tracks.value ?: emptyList()) + domainTracks
                 
                 if (currentTag != null) {
@@ -154,6 +170,7 @@ class HomeViewModel @Inject constructor(
                 updatePaginationState(domainTracks.size)
             } catch (e: Exception) {
                 currentOffset -= limit
+                _networkError.value = com.example.andrfindmusicapp.R.string.error_slow_connection
             } finally {
                 isPaginationLoading = false
             }
@@ -162,6 +179,7 @@ class HomeViewModel @Inject constructor(
 
     fun searchTracks(query: String) {
         searchJob?.cancel()
+        _networkError.value = null
         
         if (query.isEmpty()) {
             _tracks.value = allTracksCached
@@ -187,7 +205,9 @@ class HomeViewModel @Inject constructor(
             currentTag = null
             _isLoading.value = true
             try {
-                val response = RetrofitClient.jamendoService.searchTracks(query = query, offset = currentOffset)
+                val response = withTimeout(5000) {
+                    RetrofitClient.jamendoService.searchTracks(query = query, offset = currentOffset)
+                }
                 val networkResults = response.results ?: emptyList()
                 
                 if (networkResults.isNotEmpty()) {
@@ -195,9 +215,12 @@ class HomeViewModel @Inject constructor(
                     val combined = (localResult + networkResults).distinctBy { it.id }
                     _tracks.value = combined
                     updatePaginationState(networkResults.size)
+                    _networkError.value = null
                 }
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                _networkError.value = com.example.andrfindmusicapp.R.string.error_slow_connection
             } catch (e: Exception) {
-                // Если сеть упала, у нас все еще есть локальные результаты
+                _networkError.value = com.example.andrfindmusicapp.R.string.error_no_internet
             } finally {
                 _isLoading.value = false
             }

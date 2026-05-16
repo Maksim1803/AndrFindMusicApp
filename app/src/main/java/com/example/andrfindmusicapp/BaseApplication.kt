@@ -26,6 +26,12 @@ class BaseApplication : Application(), ImageLoaderFactory {
             androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
         }
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(mode)
+
+        // Применяем сохраненный язык при старте
+        preferenceProvider.getLanguage()?.let { lang ->
+            val appLocale: androidx.core.os.LocaleListCompat = androidx.core.os.LocaleListCompat.forLanguageTags(lang)
+            androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(appLocale)
+        }
     }
 
     // Настройка Coil для использования нашего "небезопасного" клиента при загрузке картинок

@@ -106,6 +106,9 @@ class HomeFragment : Fragment() {
         
         val newLang = if (currentLang == "ru") "en" else "ru"
         
+        // Сохраняем выбор в настройки
+        preferenceProvider.saveLanguage(newLang)
+        
         // Используем современный способ переключения (работает на всех версиях Android)
         val appLocale: androidx.core.os.LocaleListCompat = androidx.core.os.LocaleListCompat.forLanguageTags(newLang)
         androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(appLocale)
@@ -190,6 +193,12 @@ class HomeFragment : Fragment() {
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
             binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
         }
+
+        viewModel.networkError.observe(viewLifecycleOwner) { errorResId ->
+            errorResId?.let {
+                android.widget.Toast.makeText(requireContext(), it, android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
         
         viewLifecycleOwner.lifecycleScope.launch {
             mainViewModel.favoriteIds.collectLatest { favIds ->
@@ -206,6 +215,7 @@ class HomeFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        mainViewModel.notifyNoInternet()
         viewModel.loadLastCategoryTracks()
     }
 

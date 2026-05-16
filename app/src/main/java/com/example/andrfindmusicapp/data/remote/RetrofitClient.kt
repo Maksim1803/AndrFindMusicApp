@@ -1,8 +1,6 @@
 package com.example.andrfindmusicapp.data.remote
 
 import com.example.andrfindmusicapp.utils.UnsafeOkHttpClient
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
@@ -11,15 +9,11 @@ import java.util.concurrent.TimeUnit
 object RetrofitClient {
     private const val BASE_URL = "https://api.jamendo.com/"
 
-    private val logging = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
-    }
-
     // Используем небезопасный клиент для обхода проблем с сертификатами на старых эмуляторах
+    // Логирование отключено для релизной версии
     private val client = UnsafeOkHttpClient.getUnsafeOkHttpClient().newBuilder()
-        .addInterceptor(logging)
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
     // Свойство для получения настроенного сервиса JamendoService
