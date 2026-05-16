@@ -34,6 +34,9 @@ class HomeFragment : Fragment() {
     @javax.inject.Inject
     lateinit var trackDao: com.example.andrfindmusicapp.data.local.TrackDao
 
+    @javax.inject.Inject
+    lateinit var preferenceProvider: com.example.andrfindmusicapp.utils.PreferenceProvider
+
     // Метод для создания View и инициализации binding
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -84,11 +87,15 @@ class HomeFragment : Fragment() {
     // Метод для переключения темы приложения (светлая/темная)
     private fun toggleTheme() {
         val currentNightMode = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
-        if (currentNightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) {
-            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
+        val isDarkMode = currentNightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val newMode = if (isDarkMode) {
+            androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
         } else {
-            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
+            androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
         }
+        
+        preferenceProvider.saveIsDarkMode(!isDarkMode)
+        androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(newMode)
     }
 
     // Метод для переключения языка интерфейса (RU/EN)
