@@ -2,9 +2,12 @@ package com.example.andrfindmusicapp.ui.main
 
 import android.content.ComponentName
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -19,12 +22,13 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 // Класс для управления общим состоянием приложения, плеером и данными
 @HiltViewModel
 class MainViewModel @Inject constructor(
-    @ApplicationContext context: Context,
+    @ApplicationContext private val context: Context,
     private val trackDao: TrackDao,
     val sleepTimerManager: SleepTimerManager,
     private val downloadManager: TrackDownloadManager,
@@ -50,8 +54,43 @@ class MainViewModel @Inject constructor(
     private val _reminderTimes = MutableStateFlow<Map<String, Long>>(emptyMap())
     val reminderTimes = _reminderTimes.asStateFlow()
 
+    private val _isBuffering = MutableStateFlow(false)
+    val isBuffering = _isBuffering.asStateFlow()
+
+    private val _errorEvents = MutableSharedFlow<Int>()
+    val errorEvents = _errorEvents.asSharedFlow()
+
+    private var bufferingJob: kotlinx.coroutines.Job? = null
+
     private var controller: MediaController? = null
     private val _isControllerReady = MutableStateFlow(false)
+
+    // Метод для проверки наличия интернета
+    fun isNetworkAvailable(): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return false
+        val activeNetwork = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return activeNetwork.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    // Метод для уведомления об отсутствии сети, если трек онлайн
+    fun checkNetworkAndNotifyIfOnline() {
+        val isOnlineTrack = _currentTrack.value?.audioUrl?.startsWith("http") == true
+        if (isOnlineTrack && !isNetworkAvailable()) {
+            viewModelScope.launch {
+                _errorEvents.emit(com.example.andrfindmusicapp.R.string.error_no_internet)
+            }
+        }
+    }
+
+    // Метод для уведомления об отсутствии сети при действии (например, смена категории)
+    fun notifyNoInternet() {
+        if (!isNetworkAvailable()) {
+            viewModelScope.launch {
+                _errorEvents.emit(com.example.andrfindmusicapp.R.string.error_no_internet)
+            }
+        }
+    }
 
     init {
         // Загружаем сохраненные напоминания и времена
@@ -91,6 +130,22 @@ class MainViewModel @Inject constructor(
             controller?.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     _isPlaying.value = isPlaying
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    val isBuffering = playbackState == Player.STATE_BUFFERING
+                    _isBuffering.value = isBuffering
+                    
+                    // Если трек начал играть, отменяем все таймеры ошибок
+                    if (playbackState == Player.STATE_READY) {
+                        bufferingJob?.cancel()
+                    }
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    viewModelScope.launch {
+                        _errorEvents.emit(com.example.andrfindmusicapp.R.string.playback_error)
+                    }
                 }
 
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -150,7 +205,37 @@ class MainViewModel @Inject constructor(
 
     // Метод для запуска воспроизведения трека в контексте плейлиста
     fun playTrackWithPlaylist(track: Track, newPlaylist: List<Track>) {
-        viewModelScope.launch {
+        // Сразу обновляем текущий трек для мгновенного отклика UI
+        _currentTrack.value = track
+
+        // Запускаем независимый таймер на 5 секунд прямо сейчас
+        bufferingJob?.cancel()
+        bufferingJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(5000)
+            if (_isBuffering.value || !isPlaying.value) {
+                val isOnline = _currentTrack.value?.audioUrl?.startsWith("http") == true
+                if (isOnline) {
+                    val errorRes = if (isNetworkAvailable()) {
+                        com.example.andrfindmusicapp.R.string.error_slow_connection
+                    } else {
+                        com.example.andrfindmusicapp.R.string.error_no_internet
+                    }
+                    _errorEvents.emit(errorRes)
+                }
+            }
+        }
+
+        // Проверка сети (мгновенная)
+        val isOnline = track.audioUrl?.startsWith("http") == true
+        if (isOnline && !isNetworkAvailable()) {
+            bufferingJob?.cancel()
+            viewModelScope.launch {
+                _errorEvents.emit(com.example.andrfindmusicapp.R.string.error_no_internet)
+            }
+            return
+        }
+
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             // Ждем готовности контроллера
             _isControllerReady.first { it }
             
@@ -162,22 +247,18 @@ class MainViewModel @Inject constructor(
 
             val tracksToPlay = if (sortedPlaylist.isEmpty()) listOf(track) else sortedPlaylist
             
-            val preparedTracks = tracksToPlay.map { t ->
-                val localUri = downloadManager.getDownloadedUri(t)
-                if (localUri != null) t.copy(audioUrl = localUri.toString()) else t
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                _playlist.value = tracksToPlay
+                controller?.setMediaItems(tracksToPlay.map { createMediaItem(it) })
+
+                val index = tracksToPlay.indexOfFirst { it.id == track.id }
+                if (index != -1) controller?.seekTo(index, 0)
+
+                controller?.prepare()
+                controller?.play()
+                controller?.repeatMode = Player.REPEAT_MODE_ALL
+                preferenceProvider.saveLastState(track, tracksToPlay)
             }
-
-            _playlist.value = preparedTracks
-            controller?.setMediaItems(preparedTracks.map { createMediaItem(it) })
-
-            val index = preparedTracks.indexOfFirst { it.id == track.id }
-            if (index != -1) controller?.seekTo(index, 0)
-
-            controller?.prepare()
-            controller?.play()
-            controller?.repeatMode = Player.REPEAT_MODE_ALL
-            _currentTrack.value = preparedTracks.find { it.id == track.id } ?: track
-            preferenceProvider.saveLastState(_currentTrack.value, _playlist.value)
         }
     }
 

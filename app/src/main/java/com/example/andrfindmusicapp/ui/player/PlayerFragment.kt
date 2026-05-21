@@ -63,6 +63,11 @@ class PlayerFragment : Fragment() {
         setupRecyclerView()
         setupListeners()
         observeViewModel()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mainViewModel.checkNetworkAndNotifyIfOnline()
         startSeekBarUpdate()
     }
 
@@ -224,6 +229,13 @@ class PlayerFragment : Fragment() {
                         if (isRunning) R.color.colorPrimaryDark else R.color.player_icon_tint
                     )
                 )
+            }
+        }
+
+        // Наблюдение за буферизацией (слабый интернет)
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainViewModel.isBuffering.collectLatest { isBuffering ->
+                binding.playerProgressBar.visibility = if (isBuffering) View.VISIBLE else View.GONE
             }
         }
     }

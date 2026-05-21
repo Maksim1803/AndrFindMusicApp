@@ -11,6 +11,7 @@ interface JamendoService {
     suspend fun searchTracks(
         @Query("client_id") clientId: String = "59cb9dad",
         @Query("format") format: String = "json",
+        @Query("audioformat") audioFormat: String = "mp32",
         @Query("search") query: String,
         @Query("limit") limit: Int = 20,
         @Query("offset") offset: Int = 0
@@ -21,6 +22,7 @@ interface JamendoService {
     suspend fun getTracksByCategory(
         @Query("client_id") clientId: String = "59cb9dad",
         @Query("format") format: String = "json",
+        @Query("audioformat") audioFormat: String = "mp32",
         @Query("tags") tag: String,
         @Query("order") order: String = "popularity_week",
         @Query("limit") limit: Int = 20,

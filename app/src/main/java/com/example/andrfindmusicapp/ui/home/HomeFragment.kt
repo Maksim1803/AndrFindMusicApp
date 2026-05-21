@@ -34,6 +34,9 @@ class HomeFragment : Fragment() {
     @javax.inject.Inject
     lateinit var trackDao: com.example.andrfindmusicapp.data.local.TrackDao
 
+    @javax.inject.Inject
+    lateinit var preferenceProvider: com.example.andrfindmusicapp.utils.PreferenceProvider
+
     // Метод для создания View и инициализации binding
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -84,11 +87,15 @@ class HomeFragment : Fragment() {
     // Метод для переключения темы приложения (светлая/темная)
     private fun toggleTheme() {
         val currentNightMode = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
-        if (currentNightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) {
-            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
+        val isDarkMode = currentNightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val newMode = if (isDarkMode) {
+            androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
         } else {
-            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
+            androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
         }
+        
+        preferenceProvider.saveIsDarkMode(!isDarkMode)
+        androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(newMode)
     }
 
     // Метод для переключения языка интерфейса (RU/EN)
@@ -98,6 +105,9 @@ class HomeFragment : Fragment() {
         val currentLang = currentLocale?.language ?: java.util.Locale.getDefault().language
         
         val newLang = if (currentLang == "ru") "en" else "ru"
+        
+        // Сохраняем выбор в настройки
+        preferenceProvider.saveLanguage(newLang)
         
         // Используем современный способ переключения (работает на всех версиях Android)
         val appLocale: androidx.core.os.LocaleListCompat = androidx.core.os.LocaleListCompat.forLanguageTags(newLang)
@@ -183,6 +193,12 @@ class HomeFragment : Fragment() {
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
             binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
         }
+
+        viewModel.networkError.observe(viewLifecycleOwner) { errorResId ->
+            errorResId?.let {
+                android.widget.Toast.makeText(requireContext(), it, android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
         
         viewLifecycleOwner.lifecycleScope.launch {
             mainViewModel.favoriteIds.collectLatest { favIds ->
@@ -199,6 +215,7 @@ class HomeFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        mainViewModel.notifyNoInternet()
         viewModel.loadLastCategoryTracks()
     }
 

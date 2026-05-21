@@ -48,6 +48,11 @@ class FavoritesFragment : Fragment() {
         observeViewModel()
     }
 
+    override fun onResume() {
+        super.onResume()
+        mainViewModel.notifyNoInternet()
+    }
+
     // Метод для настройки RecyclerView и его адаптера
     private fun setupRecyclerView() {
         adapter = HomeAdapter(

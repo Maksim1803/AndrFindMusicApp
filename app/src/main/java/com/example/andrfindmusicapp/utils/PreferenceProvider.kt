@@ -83,6 +83,26 @@ class PreferenceProvider(context: Context) {
         }
     }
 
+    // Метод для сохранения темы приложения
+    fun saveIsDarkMode(isDark: Boolean) {
+        preference.edit().putBoolean(KEY_IS_DARK_MODE, isDark).apply()
+    }
+
+    // Метод для получения состояния темы
+    fun isDarkMode(): Boolean {
+        return preference.getBoolean(KEY_IS_DARK_MODE, false)
+    }
+
+    // Метод для сохранения языка приложения
+    fun saveLanguage(lang: String) {
+        preference.edit().putString(KEY_LANGUAGE, lang).apply()
+    }
+
+    // Метод для получения сохраненного языка
+    fun getLanguage(): String? {
+        return preference.getString(KEY_LANGUAGE, null)
+    }
+
     companion object {
         private const val KEY_LAST_CATEGORY = "last_category"
         private const val DEFAULT_CATEGORY = "pop"
@@ -90,5 +110,7 @@ class PreferenceProvider(context: Context) {
         private const val KEY_LAST_PLAYLIST = "last_playlist"
         private const val KEY_REMINDERS = "reminder_ids"
         private const val KEY_REMINDER_TIMES = "reminder_times"
+        private const val KEY_IS_DARK_MODE = "is_dark_mode"
+        private const val KEY_LANGUAGE = "app_language"
     }
 }

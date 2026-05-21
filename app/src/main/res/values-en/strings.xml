@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">AndrFindMusicApp</string>
+    <string name="app_name">Music Wave</string>
     <string name="music_poster_content_description">Music poster</string>
     <string name="search_hint">Search tracks...</string>
     <string name="favorite_icon_content_description">Add to favorites</string>
@@ -33,7 +33,7 @@
     <string name="sleep_timer_content_description">Sleep Timer</string>
     <string name="share_content_description">Share track</string>
     <string name="download_content_description">Download track</string>
-    <string name="share_text">Listening to %1$s by %2$s in AndrFindMusic app!</string>
+    <string name="share_text">Listening to %1$s by %2$s in Music Wave app!</string>
     <string name="download_started">Download started...</string>
     <string name="download_already_exists">This track is already downloaded</string>
     <string name="download_failed">Download failed</string>
@@ -59,4 +59,8 @@
     <string name="reminder_removed">Reminder removed</string>
     <string name="daily_recommendation_notif_title">Your track of the day!</string>
     <string name="daily_recommendation_notif_text">We picked something special for you</string>
+    <string name="error_no_internet">No internet connection</string>
+    <string name="error_loading">Error loading data</string>
+    <string name="playback_error">Playback error. Check your connection</string>
+    <string name="error_slow_connection">Slow connection. Please wait...</string>
 </resources>

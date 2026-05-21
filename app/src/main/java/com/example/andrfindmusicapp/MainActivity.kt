@@ -5,9 +5,14 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
 import com.example.andrfindmusicapp.databinding.ActivityMainBinding
 import com.example.andrfindmusicapp.ui.main.MainViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 // Главный класс приложения
 @AndroidEntryPoint
@@ -46,6 +51,14 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainViewModel.errorEvents.collect { errorResId ->
+                    android.widget.Toast.makeText(this@MainActivity, errorResId, android.widget.Toast.LENGTH_SHORT).show()
+                }
             }
         }
 
