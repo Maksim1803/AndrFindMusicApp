@@ -5,14 +5,17 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [TrackEntity::class], version = 2, exportSchema = false)
+// Класс для управления базой данных Room
+@Database(entities = [TrackEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
+    // Метод для получения доступа к DAO треков
     abstract fun trackDao(): TrackDao
 
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        // Метод для получения экземпляра базы данных (Singleton)
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(

@@ -1,112 +1,272 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/transparent"
-    android:padding="16dp">
+    android:fillViewport="true"
+    android:background="@android:color/transparent">
 
-    <androidx.cardview.widget.CardView
-        android:id="@+id/cardView"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_margin="60dp"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="8dp"
-        app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp">
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cardView"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_marginStart="30dp"
+            android:layout_marginEnd="70dp"
+            android:layout_marginTop="20dp"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="8dp"
+            app:layout_constraintDimensionRatio="1:0.8"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintWidth_max="400dp">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <ImageView
+                    android:id="@+id/details_poster"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    android:contentDescription="Album Art"
+                    tools:src="@tools:sample/avatars" />
+
+                <ProgressBar
+                    android:id="@+id/player_progress_bar"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="center"
+                    android:visibility="gone"
+                    android:indeterminateTint="@android:color/white" />
+
+                <ImageButton
+                    android:id="@+id/btn_lyrics"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_gravity="top|start"
+                    android:layout_margin="8dp"
+                    android:background="@drawable/bg_circle_translucent"
+                    android:padding="8dp"
+                    android:contentDescription="@string/show_lyrics"
+                    app:srcCompat="@drawable/ic_lyrics"
+                    app:tint="@android:color/white" />
+
+                <ImageButton
+                    android:id="@+id/btn_reminder"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_gravity="top|end"
+                    android:layout_margin="8dp"
+                    android:background="@drawable/bg_circle_translucent"
+                    android:padding="8dp"
+                    android:contentDescription="@string/remind_later"
+                    app:srcCompat="@drawable/ic_notifications_none"
+                    app:tint="@android:color/white" />
+            </FrameLayout>
+        </androidx.cardview.widget.CardView>
+
+        <TextView
+            android:id="@+id/details_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center"
+            android:textAppearance="@style/TextAppearance.AppCompat.Headline"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="@+id/cardView"
+            app:layout_constraintStart_toStartOf="@+id/cardView"
+            app:layout_constraintTop_toBottomOf="@+id/cardView"
+            tools:text="Track Title" />
+
+        <TextView
+            android:id="@+id/details_artist"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center"
+            android:textSize="16sp"
+            app:layout_constraintEnd_toEndOf="@+id/cardView"
+            app:layout_constraintStart_toStartOf="@+id/cardView"
+            app:layout_constraintTop_toBottomOf="@+id/details_title"
+            tools:text="Artist Name" />
+
+        <SeekBar
+            android:id="@+id/seek_bar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/details_artist" />
+
+        <TextView
+            android:id="@+id/tv_current_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:text="00:00"
+            android:textSize="12sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/seek_bar" />
+
+        <TextView
+            android:id="@+id/tv_total_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:text="00:00"
+            android:textSize="12sp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/seek_bar" />
+
+        <LinearLayout
+            android:id="@+id/controls_layout"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/tv_current_time">
+
+            <ImageButton
+                android:id="@+id/btn_prev"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:contentDescription="Previous"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_media_previous" />
+
+            <ImageButton
+                android:id="@+id/btn_play_pause"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:layout_marginHorizontal="16dp"
+                android:contentDescription="Play or Pause"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:scaleType="fitCenter"
+                android:src="@android:drawable/ic_media_play" />
+
+            <ImageButton
+                android:id="@+id/btn_next"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:contentDescription="Next"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_media_next" />
+        </LinearLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_small_playlist"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical"
+            android:visibility="visible"
+            android:nestedScrollingEnabled="false"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/controls_layout"
+            app:layout_constraintBottom_toBottomOf="parent"
+            tools:listitem="@layout/item_small_track" />
+
+        <ScrollView
+            android:id="@+id/lyrics_container"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/controls_layout"
+            app:layout_constraintBottom_toBottomOf="parent">
+
+            <TextView
+                android:id="@+id/tv_lyrics"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="16dp"
+                android:gravity="center"
+                android:textSize="16sp"
+                android:textColor="?attr/colorOnSurface"
+                tools:text="Song lyrics will appear here..." />
+        </ScrollView>
 
         <ImageView
-            android:id="@+id/details_poster"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="centerCrop"
-            android:contentDescription="Album Art"
-            tools:src="@tools:sample/avatars" />
-    </androidx.cardview.widget.CardView>
-
-    <TextView
-        android:id="@+id/details_title"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:textAppearance="@style/TextAppearance.AppCompat.Headline"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/cardView"
-        tools:text="Track Title" />
-
-    <TextView
-        android:id="@+id/details_artist"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:textSize="18sp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/details_title"
-        tools:text="Artist Name" />
-
-    <SeekBar
-        android:id="@+id/seek_bar"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/details_artist" />
-
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:orientation="horizontal"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/seek_bar">
+            android:id="@+id/details_favorite"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginTop="20dp"
+            android:layout_marginEnd="10dp"
+            android:contentDescription="@string/favorite_icon_content_description"
+            android:src="@drawable/ic_star_border"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:tint="@color/player_icon_tint" />
 
         <ImageButton
-            android:id="@+id/btn_prev"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:contentDescription="Previous"
+            android:id="@+id/btn_sleep_timer"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginTop="8dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_media_previous" />
+            android:contentDescription="@string/sleep_timer_content_description"
+            android:src="@drawable/ic_alarm_off"
+            app:layout_constraintEnd_toEndOf="@+id/details_favorite"
+            app:layout_constraintStart_toStartOf="@+id/details_favorite"
+            app:layout_constraintTop_toBottomOf="@+id/details_favorite"
+            app:tint="@color/player_icon_tint" />
 
         <ImageButton
-            android:id="@+id/btn_play_pause"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:layout_marginHorizontal="24dp"
-            android:contentDescription="Play or Pause"
+            android:id="@+id/btn_share"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginTop="8dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:scaleType="fitCenter"
-            android:src="@android:drawable/ic_media_play" />
+            android:contentDescription="@string/share_content_description"
+            android:src="@drawable/ic_menu_share"
+            app:layout_constraintEnd_toEndOf="@+id/btn_sleep_timer"
+            app:layout_constraintStart_toStartOf="@+id/btn_sleep_timer"
+            app:layout_constraintTop_toBottomOf="@+id/btn_sleep_timer"
+            app:tint="@color/player_icon_tint" />
 
         <ImageButton
-            android:id="@+id/btn_next"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:contentDescription="Next"
+            android:id="@+id/btn_download"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginTop="8dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_media_next" />
-    </LinearLayout>
+            android:contentDescription="@string/download_content_description"
+            android:src="@drawable/ic_download"
+            app:layout_constraintEnd_toEndOf="@+id/btn_share"
+            app:layout_constraintStart_toStartOf="@+id/btn_share"
+            app:layout_constraintTop_toBottomOf="@+id/btn_share"
+            app:tint="@color/player_icon_tint" />
 
-    <ImageView
-        android:id="@+id/details_favorite"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_margin="16dp"
-        android:contentDescription="Add to favorites"
-        android:src="@drawable/ic_star_border"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:tint="@color/colorPrimaryDark" />
+        <ImageButton
+            android:id="@+id/btn_delete_player"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginTop="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/delete_track_title"
+            android:src="@android:drawable/ic_menu_delete"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="@+id/btn_share"
+            app:layout_constraintStart_toStartOf="@+id/btn_share"
+            app:layout_constraintTop_toBottomOf="@+id/btn_share"
+            app:tint="@color/player_icon_tint" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.core.widget.NestedScrollView>

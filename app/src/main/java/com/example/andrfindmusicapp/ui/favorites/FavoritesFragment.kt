@@ -9,28 +9,29 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.example.andrfindmusicapp.R
-import com.example.andrfindmusicapp.data.local.AppDatabase
-import com.example.andrfindmusicapp.data.local.TrackEntity
 import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.FragmentFavoritesBinding
 import com.example.andrfindmusicapp.ui.home.adapter.HomeAdapter
-import com.example.andrfindmusicapp.ui.player.PlayerViewModel
+import com.example.andrfindmusicapp.ui.main.MainViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 import dagger.hilt.android.AndroidEntryPoint
 
+// Класс для фрагмента, отображающего список избранных треков
 @AndroidEntryPoint
 class FavoritesFragment : Fragment() {
     private var _binding: FragmentFavoritesBinding? = null
     private val binding get() = _binding!!
 
-    private val playerViewModel: PlayerViewModel by activityViewModels()
+    private val mainViewModel: MainViewModel by activityViewModels()
     private lateinit var adapter: HomeAdapter
+    private var favoriteTracks: List<Track> = emptyList()
 
     @javax.inject.Inject
     lateinit var trackDao: com.example.andrfindmusicapp.data.local.TrackDao
 
+    // Метод для создания View и инициализации binding
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -40,31 +41,42 @@ class FavoritesFragment : Fragment() {
         return binding.root
     }
 
+    // Метод для настройки логики фрагмента после создания View
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupRecyclerView()
-        observeFavorites()
+        observeViewModel()
     }
 
+    override fun onResume() {
+        super.onResume()
+        mainViewModel.notifyNoInternet()
+    }
+
+    // Метод для настройки RecyclerView и его адаптера
     private fun setupRecyclerView() {
         adapter = HomeAdapter(
             onItemClick = { track ->
-                playerViewModel.selectTrack(track)
-                val bundle = Bundle().apply { putSerializable("track", track) }
-                findNavController().navigate(R.id.navigation_player, bundle)
+                mainViewModel.playTrackWithPlaylist(track, favoriteTracks)
+                findNavController().navigate(R.id.navigation_player)
             },
             onFavoriteClick = { track ->
-                toggleFavorite(track)
+                mainViewModel.toggleFavorite(track)
+            },
+            onReminderClick = { track ->
+                showReminderDialog(track)
             }
         )
         binding.favoritesRecycler.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(requireContext())
         binding.favoritesRecycler.adapter = adapter
     }
 
-    private fun observeFavorites() {
+    // Метод для подписки на изменения данных (избранное, напоминания)
+    private fun observeViewModel() {
+        // Подгружаем актуальный список избранного из БД
         viewLifecycleOwner.lifecycleScope.launch {
             trackDao.getAllFavorites().collectLatest { entities ->
-                val tracks = entities.map { entity ->
+                val allFavs = entities.map { entity ->
                     Track(
                         id = entity.id,
                         name = entity.name,
@@ -75,30 +87,43 @@ class FavoritesFragment : Fragment() {
                         duration = entity.duration
                     )
                 }
-                adapter.updateData(tracks)
-                adapter.updateFavorites(tracks.map { it.id }.toSet())
+                // ФИЛЬТР: Оставляем в списке Избранное только онлайн-треки
+                favoriteTracks = allFavs.filter { 
+                    it.audioUrl?.startsWith("http") == true
+                }
+                adapter.updateData(favoriteTracks)
+            }
+        }
+
+        // Обновляем иконки звезд через MainViewModel
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainViewModel.favoriteIds.collectLatest { favIds ->
+                adapter.updateFavorites(favIds)
+            }
+        }
+
+        // Обновляем иконки напоминаний через MainViewModel
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainViewModel.reminderIds.collectLatest { remIds ->
+                adapter.updateReminders(remIds)
             }
         }
     }
 
-    private fun toggleFavorite(track: Track) {
-        val database = AppDatabase.getDatabase(requireContext())
-        viewLifecycleOwner.lifecycleScope.launch {
-            val dao = database.trackDao()
-            val entity = TrackEntity(
-                id = track.id,
-                name = track.name,
-                artistName = track.artistName,
-                albumName = track.albumName,
-                imageUrl = track.imageUrl,
-                audioUrl = track.audioUrl,
-                duration = track.duration
-            )
-            if (dao.isFavorite(track.id)) {
-                dao.deleteFavorite(entity)
-            } else {
-                dao.insertFavorite(entity)
-            }
+    // Метод для показа диалога удаления напоминания
+    private fun showReminderDialog(track: Track) {
+        val timeMillis = mainViewModel.reminderTimes.value[track.id] ?: return
+        val calendar = java.util.Calendar.getInstance().apply { this.timeInMillis = timeMillis }
+        val dateStr = android.text.format.DateFormat.getDateFormat(requireContext()).format(calendar.time)
+        val timeStr = android.text.format.DateFormat.getTimeFormat(requireContext()).format(calendar.time)
+
+        com.example.andrfindmusicapp.utils.DialogHelper.showReminderDeleteDialog(
+            requireContext(),
+            dateStr,
+            timeStr
+        ) {
+            mainViewModel.removeReminder(track.id)
+            android.widget.Toast.makeText(requireContext(), R.string.reminder_removed, android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 

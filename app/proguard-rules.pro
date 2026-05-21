@@ -1,21 +1,32 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# --- Retrofit & OkHttp ---
+-keepattributes Signature, InnerClasses, AnnotationDefault
+-dontwarn okhttp3.**
+-dontwarn retrofit2.**
+-dontwarn okio.**
+-dontwarn javax.annotation.**
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# --- Gson ---
+-keepattributes *Annotation*
+-keep class com.google.gson.reflect.TypeToken
+-keep class * extends com.google.gson.reflect.TypeToken
+-keep public class * implements com.google.gson.TypeAdapterFactory
+-keep class com.example.andrfindmusicapp.data.model.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# --- Room ---
+-keep class * extends androidx.room.RoomDatabase
+-dontwarn androidx.room.paging.**
+-keep class com.example.andrfindmusicapp.data.local.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# --- Coil ---
+-keep class coil.** { *; }
+-dontwarn coil.**
+
+# --- Media3 / ExoPlayer ---
+-keep class androidx.media3.** { *; }
+-dontwarn androidx.media3.**
+
+# --- Hilt / Dagger ---
+-keep class dagger.hilt.** { *; }
+-keep class * extends dagger.hilt.internal.**
+-keepattributes *Annotation*
+-dontwarn net.bytebuddy.**

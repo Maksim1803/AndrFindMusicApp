@@ -9,12 +9,15 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.andrfindmusicapp.R
 import com.example.andrfindmusicapp.databinding.FragmentCategoriesBinding
+import com.example.andrfindmusicapp.ui.main.MainViewModel
+import androidx.fragment.app.activityViewModels
 import com.example.andrfindmusicapp.ui.categories.adapter.CategoryAdapter
 import com.example.andrfindmusicapp.utils.PreferenceProvider
 
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
+// Класс для фрагмента выбора категорий музыки
 @AndroidEntryPoint
 class CategoriesFragment : Fragment() {
     private var _binding: FragmentCategoriesBinding? = null
@@ -23,6 +26,9 @@ class CategoriesFragment : Fragment() {
     @Inject
     lateinit var preferenceProvider: PreferenceProvider
 
+    private val mainViewModel: MainViewModel by activityViewModels()
+
+    // Метод для создания View фрагмента и инициализации binding
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -32,6 +38,7 @@ class CategoriesFragment : Fragment() {
         return binding.root
     }
 
+    // Метод для настройки списка категорий и логики выбора
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
@@ -46,6 +53,8 @@ class CategoriesFragment : Fragment() {
         val currentCategoryTag = preferenceProvider.getLastCategory()
         
         binding.categoriesRecycler.adapter = CategoryAdapter(categories, currentCategoryTag) { category ->
+            // 0. Проверяем сеть
+            mainViewModel.notifyNoInternet()
             // 1. Сохраняем выбор
             preferenceProvider.saveCategory(category.tag)
             // 2. Переходим на главный экран
@@ -53,6 +62,7 @@ class CategoriesFragment : Fragment() {
         }
     }
 
+    // Метод для очистки ресурсов binding
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
