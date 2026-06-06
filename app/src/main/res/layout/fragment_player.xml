@@ -14,8 +14,8 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_marginStart="30dp"
-        android:layout_marginEnd="70dp"
-        android:layout_marginTop="10dp"
+        android:layout_marginEnd="60dp"
+        android:layout_marginTop="25dp"
         app:cardCornerRadius="20dp"
         app:cardElevation="8dp"
         app:layout_constraintDimensionRatio="1:0.8"
@@ -32,8 +32,8 @@
                 android:id="@+id/details_poster"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:scaleType="centerCrop"
                 android:contentDescription="Album Art"
+                android:scaleType="centerCrop"
                 tools:src="@tools:sample/avatars" />
 
             <ProgressBar
@@ -219,6 +219,7 @@
         android:orientation="vertical"
         android:gravity="center"
         android:layout_marginStart="15dp"
+        android:layout_marginTop="30dp"
         app:layout_constraintStart_toEndOf="@+id/cardView"
         app:layout_constraintTop_toTopOf="@+id/cardView">
 

@@ -25,6 +25,17 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Обработка системных отступов (Edge-to-Edge) для API 35+
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.main) { v, insets ->
+            val systemBars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            // Сверху отодвигаем весь контент (статус-бар)
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, 0)
+            
+            // Снизу отодвигаем ТОЛЬКО иконки внутри нижнего меню (навигационная панель)
+            binding.bottomNav.setPadding(0, 0, 0, systemBars.bottom)
+            insets
+        }
+
         val navHostFragment = supportFragmentManager
             .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
         val navController = navHostFragment.navController
