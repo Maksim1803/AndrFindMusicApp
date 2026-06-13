@@ -63,4 +63,9 @@
     <string name="error_loading">Error loading data</string>
     <string name="playback_error">Playback error. Check your connection</string>
     <string name="error_slow_connection">Slow connection. Please wait...</string>
+    <string name="first_launch_scan_title">Music on Device</string>
+    <string name="first_launch_scan_message">Music tracks were found on your device. Would you like to add them to the app?</string>
+    <string name="new_tracks_scan_message">New music tracks were found on your device. Would you like to add them to the app?</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
 </resources>
