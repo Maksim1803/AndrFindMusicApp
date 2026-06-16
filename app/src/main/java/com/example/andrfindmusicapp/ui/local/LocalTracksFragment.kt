@@ -19,9 +19,12 @@ import com.example.andrfindmusicapp.data.model.Track
 import com.example.andrfindmusicapp.databinding.FragmentLocalTracksBinding
 import com.example.andrfindmusicapp.ui.home.adapter.HomeAdapter
 import com.example.andrfindmusicapp.ui.main.MainViewModel
+import com.example.andrfindmusicapp.utils.PreferenceProvider
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 // Класс для фрагмента, отображающего локальные (скачанные) треки на устройстве
 @AndroidEntryPoint
@@ -31,6 +34,9 @@ class LocalTracksFragment : Fragment() {
 
     private val viewModel: LocalTracksViewModel by viewModels()
     private val mainViewModel: MainViewModel by activityViewModels()
+
+    @Inject
+    lateinit var preferenceProvider: PreferenceProvider
 
     private lateinit var adapter: HomeAdapter
 
@@ -57,6 +63,10 @@ class LocalTracksFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         setupRecyclerView()
         observeViewModel()
+    }
+
+    override fun onResume() {
+        super.onResume()
         checkPermissionAndLoad()
     }
 
@@ -82,7 +92,7 @@ class LocalTracksFragment : Fragment() {
 
     // Метод для показа диалога подтверждения удаления локального файла
     private fun showDeleteConfirmDialog(track: Track) {
-        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+        MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.delete_track_title)
             .setMessage(getString(R.string.delete_track_message, track.name))
             .setPositiveButton(R.string.delete_confirm) { _, _ ->
@@ -117,6 +127,8 @@ class LocalTracksFragment : Fragment() {
         viewModel.localTracks.observe(viewLifecycleOwner) { tracks ->
             adapter.updateData(tracks)
             binding.tvNoTracks.visibility = if (tracks.isEmpty()) View.VISIBLE else View.GONE
+            // Обновляем сохраненное количество, так как пользователь уже видит этот список
+            preferenceProvider.saveLastTrackCount(tracks.size)
         }
 
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->

@@ -103,6 +103,26 @@ class PreferenceProvider(context: Context) {
         return preference.getString(KEY_LANGUAGE, null)
     }
 
+    // Метод для получения состояния первого запуска
+    fun isFirstLaunch(): Boolean {
+        return preference.getBoolean(KEY_IS_FIRST_LAUNCH, true)
+    }
+
+    // Метод для установки флага первого запуска в false
+    fun setFirstLaunchCompleted() {
+        preference.edit().putBoolean(KEY_IS_FIRST_LAUNCH, false).apply()
+    }
+
+    // Метод для получения количества треков при прошлом сканировании
+    fun getLastTrackCount(): Int {
+        return preference.getInt(KEY_LAST_TRACK_COUNT, 0)
+    }
+
+    // Метод для сохранения текущего количества треков
+    fun saveLastTrackCount(count: Int) {
+        preference.edit().putInt(KEY_LAST_TRACK_COUNT, count).apply()
+    }
+
     companion object {
         private const val KEY_LAST_CATEGORY = "last_category"
         private const val DEFAULT_CATEGORY = "pop"
@@ -112,5 +132,7 @@ class PreferenceProvider(context: Context) {
         private const val KEY_REMINDER_TIMES = "reminder_times"
         private const val KEY_IS_DARK_MODE = "is_dark_mode"
         private const val KEY_LANGUAGE = "app_language"
+        private const val KEY_IS_FIRST_LAUNCH = "is_first_launch"
+        private const val KEY_LAST_TRACK_COUNT = "last_track_count"
     }
 }

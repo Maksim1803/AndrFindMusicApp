@@ -366,6 +366,24 @@ class MainViewModel @Inject constructor(
         preferenceProvider.saveReminderTimes(currentTimes)
     }
 
+    // Метод для получения количества локальных треков на устройстве
+    fun getLocalTracksCount(): Int {
+        val projection = arrayOf(android.provider.MediaStore.Audio.Media._ID)
+        val selection = "${android.provider.MediaStore.Audio.Media.IS_MUSIC} != 0"
+        
+        return try {
+            context.contentResolver.query(
+                android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                selection,
+                null,
+                null
+            )?.use { it.count } ?: 0
+        } catch (e: Exception) {
+            0
+        }
+    }
+
     // Метод для удаления физического файла трека
     fun deleteTrack(track: Track) = downloadManager.deleteTrackFile(track)
     

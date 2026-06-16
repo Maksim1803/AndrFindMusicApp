@@ -63,4 +63,9 @@
     <string name="error_loading">Ошибка при загрузке данных</string>
     <string name="playback_error">Ошибка воспроизведения. Проверьте подключение</string>
     <string name="error_slow_connection">Медленное соединение. Пожалуйста, подождите...</string>
+    <string name="first_launch_scan_title">Музыка на устройстве</string>
+    <string name="first_launch_scan_message">На вашем устройстве обнаружены музыкальные треки, добавить их в приложение?</string>
+    <string name="new_tracks_scan_message">На вашем устройстве обнаружены новые музыкальные треки, добавить их в приложение?</string>
+    <string name="yes">Да</string>
+    <string name="no">Нет</string>
 </resources>
