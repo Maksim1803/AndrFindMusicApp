@@ -7,36 +7,36 @@
 
     <fragment
         android:id="@+id/navigation_home"
-        android:name="com.example.andrfindmusicapp.ui.home.HomeFragment"
+        android:name="com.Maksim1803.andrfindmusicapp.ui.home.HomeFragment"
         android:label="Поиск"
         tools:layout="@layout/fragment_home" />
 
     <fragment
         android:id="@+id/navigation_player"
-        android:name="com.example.andrfindmusicapp.ui.player.PlayerFragment"
+        android:name="com.Maksim1803.andrfindmusicapp.ui.player.PlayerFragment"
         android:label="Плеер"
         tools:layout="@layout/fragment_player">
         <argument
             android:name="track"
-            app:argType="com.example.andrfindmusicapp.data.model.Track"
+            app:argType="com.Maksim1803.andrfindmusicapp.data.model.Track"
             app:nullable="true" />
     </fragment>
 
     <fragment
         android:id="@+id/navigation_favorites"
-        android:name="com.example.andrfindmusicapp.ui.favorites.FavoritesFragment"
+        android:name="com.Maksim1803.andrfindmusicapp.ui.favorites.FavoritesFragment"
         android:label="Избранное"
         tools:layout="@layout/fragment_favorites" />
 
     <fragment
         android:id="@+id/navigation_categories"
-        android:name="com.example.andrfindmusicapp.ui.categories.CategoriesFragment"
+        android:name="com.Maksim1803.andrfindmusicapp.ui.categories.CategoriesFragment"
         android:label="Категории"
         tools:layout="@layout/fragment_categories" />
 
     <fragment
         android:id="@+id/navigation_local"
-        android:name="com.example.andrfindmusicapp.ui.local.LocalTracksFragment"
+        android:name="com.Maksim1803.andrfindmusicapp.ui.local.LocalTracksFragment"
         android:label="@string/local_tracks_tab"
         tools:layout="@layout/fragment_local_tracks" />
 </navigation>

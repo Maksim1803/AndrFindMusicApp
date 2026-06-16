@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.andrfindmusicapp"
+    namespace = "com.Maksim1803.andrfindmusicapp"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.andrfindmusicapp"
+        applicationId = "com.Maksim1803.andrfindmusicapp"
         minSdk = 28
         targetSdk = 35
         versionCode = 1

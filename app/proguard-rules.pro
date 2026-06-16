@@ -10,12 +10,12 @@
 -keep class com.google.gson.reflect.TypeToken
 -keep class * extends com.google.gson.reflect.TypeToken
 -keep public class * implements com.google.gson.TypeAdapterFactory
--keep class com.example.andrfindmusicapp.data.model.** { *; }
+-keep class com.Maksim1803.andrfindmusicapp.data.model.** { *; }
 
 # --- Room ---
 -keep class * extends androidx.room.RoomDatabase
 -dontwarn androidx.room.paging.**
--keep class com.example.andrfindmusicapp.data.local.** { *; }
+-keep class com.Maksim1803.andrfindmusicapp.data.local.** { *; }
 
 # --- Coil ---
 -keep class coil.** { *; }
