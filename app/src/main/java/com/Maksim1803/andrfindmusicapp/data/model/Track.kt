@@ -11,7 +11,8 @@ data class Track(
     @SerializedName("artist_name") val artistName: String?,
     @SerializedName("album_name") val albumName: String?,
     @SerializedName("audio") val audioUrl: String?,
-    @SerializedName("image") val imageUrl: String?
+    @SerializedName("image") val imageUrl: String?,
+    val folderName: String? = null
 ) : Serializable
 
 // Класс для представления ответа от API Jamendo
