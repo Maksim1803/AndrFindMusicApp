@@ -84,13 +84,12 @@ class FavoritesFragment : Fragment() {
                         albumName = entity.albumName,
                         audioUrl = entity.audioUrl,
                         imageUrl = entity.imageUrl,
-                        duration = entity.duration
+                        duration = entity.duration,
+                        folderName = entity.category
                     )
                 }
-                // ФИЛЬТР: Оставляем в списке Избранное только онлайн-треки
-                favoriteTracks = allFavs.filter { 
-                    it.audioUrl?.startsWith("http") == true
-                }
+                // Убираем фильтр, чтобы локальные треки тоже отображались в Избранном
+                favoriteTracks = allFavs
                 adapter.updateData(favoriteTracks)
             }
         }

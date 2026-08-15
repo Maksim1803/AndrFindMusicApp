@@ -18,6 +18,7 @@
     <color name="timer_dialog_bg">#87CEEB</color>
     <color name="timer_dialog_text">#000000</color>
     <color name="player_icon_tint">#3700B3</color>
+    <color name="folder_yellow">#FFCA28</color>
 
     <!-- Dark Theme Gradient -->
     <color name="dark_gradient_top">#001B51</color>

@@ -38,7 +38,9 @@ class LocalTracksFragment : Fragment() {
     @Inject
     lateinit var preferenceProvider: PreferenceProvider
 
-    private lateinit var adapter: HomeAdapter
+    private lateinit var trackAdapter: HomeAdapter
+    private lateinit var folderAdapter: com.Maksim1803.andrfindmusicapp.ui.local.adapter.FolderAdapter
+    private var currentFolderName: String? = null
 
     // Обработчик запроса разрешений на чтение памяти
     private val requestPermissionLauncher = registerForActivityResult(
@@ -61,7 +63,8 @@ class LocalTracksFragment : Fragment() {
     // Метод для настройки фрагмента после создания View
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        setupRecyclerView()
+        setupRecyclerViews()
+        setupListeners()
         observeViewModel()
     }
 
@@ -70,11 +73,19 @@ class LocalTracksFragment : Fragment() {
         checkPermissionAndLoad()
     }
 
+    private fun setupListeners() {
+        binding.btnBack.setOnClickListener {
+            currentFolderName = null
+            updateUI()
+        }
+    }
+
     // Метод для настройки RecyclerView и его адаптера для локальных треков
-    private fun setupRecyclerView() {
-        adapter = HomeAdapter(
+    private fun setupRecyclerViews() {
+        trackAdapter = HomeAdapter(
             onItemClick = { track ->
-                mainViewModel.playTrackWithPlaylist(track, viewModel.localTracks.value ?: emptyList())
+                val playlist = viewModel.localFolders.value?.get(currentFolderName) ?: emptyList()
+                mainViewModel.playTrackWithPlaylist(track, playlist)
                 findNavController().navigate(R.id.navigation_player)
             },
             onFavoriteClick = { track ->
@@ -87,7 +98,45 @@ class LocalTracksFragment : Fragment() {
                 showDeleteConfirmDialog(track)
             }
         )
-        binding.rvLocalTracks.adapter = adapter
+
+        folderAdapter = com.Maksim1803.andrfindmusicapp.ui.local.adapter.FolderAdapter(
+            onFolderClick = { folderName ->
+                currentFolderName = folderName
+                updateUI()
+            }
+        )
+    }
+
+    private fun updateUI() {
+        val folders = viewModel.localFolders.value
+        
+        if (folders == null) {
+            binding.tvNoTracks.visibility = View.GONE
+            return
+        }
+        
+        if (currentFolderName == null) {
+            binding.rvLocalTracks.adapter = folderAdapter
+            val folderList = folders.map { it.key to it.value.size }.sortedBy { it.first }
+            folderAdapter.updateData(folderList)
+            
+            binding.tvFolderTitle.text = getString(R.string.local_folders)
+            binding.btnBack.visibility = View.GONE
+            binding.tvNoTracks.visibility = if (folderList.isEmpty()) View.VISIBLE else View.GONE
+        } else {
+            binding.rvLocalTracks.adapter = trackAdapter
+            val tracksInFolder = folders[currentFolderName] ?: emptyList()
+            trackAdapter.updateData(tracksInFolder)
+            
+            val displayName = if (currentFolderName == "Jamendo_Tracks") {
+                getString(R.string.folder_jamendo)
+            } else {
+                currentFolderName
+            }
+            binding.tvFolderTitle.text = displayName
+            binding.btnBack.visibility = View.VISIBLE
+            binding.tvNoTracks.visibility = if (tracksInFolder.isEmpty()) View.VISIBLE else View.GONE
+        }
     }
 
     // Метод для показа диалога подтверждения удаления локального файла
@@ -124,10 +173,12 @@ class LocalTracksFragment : Fragment() {
 
     // Метод для подписки на изменения данных во ViewModel
     private fun observeViewModel() {
+        viewModel.localFolders.observe(viewLifecycleOwner) {
+            updateUI()
+        }
+
         viewModel.localTracks.observe(viewLifecycleOwner) { tracks ->
-            adapter.updateData(tracks)
-            binding.tvNoTracks.visibility = if (tracks.isEmpty()) View.VISIBLE else View.GONE
-            // Обновляем сохраненное количество, так как пользователь уже видит этот список
+            // Обновляем сохраненное количество
             preferenceProvider.saveLastTrackCount(tracks.size)
         }
 
@@ -138,14 +189,14 @@ class LocalTracksFragment : Fragment() {
         // Наблюдаем за избранным, чтобы звездочки обновлялись
         viewLifecycleOwner.lifecycleScope.launch {
             mainViewModel.favoriteIds.collectLatest { favIds ->
-                adapter.updateFavorites(favIds)
+                trackAdapter.updateFavorites(favIds)
             }
         }
 
         // Наблюдаем за напоминаниями, чтобы колокольчики обновлялись
         viewLifecycleOwner.lifecycleScope.launch {
             mainViewModel.reminderIds.collectLatest { remIds ->
-                adapter.updateReminders(remIds)
+                trackAdapter.updateReminders(remIds)
             }
         }
     }

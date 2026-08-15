@@ -279,7 +279,7 @@ class MainViewModel @Inject constructor(
                     imageUrl = track.imageUrl ?: "",
                     audioUrl = track.audioUrl ?: "",
                     isFavorite = true,
-                    category = ""
+                    category = track.folderName ?: ""
                 )
                 trackDao.insertIgnore(entity)
                 trackDao.updateFavoriteStatus(track.id, true)
