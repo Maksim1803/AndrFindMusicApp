@@ -42,6 +42,15 @@ class LocalTracksFragment : Fragment() {
     private lateinit var folderAdapter: com.Maksim1803.andrfindmusicapp.ui.local.adapter.FolderAdapter
     private var currentFolderName: String? = null
 
+    // Обработчик системного запроса на изменение файла (для Android 10+)
+    private val intentSenderLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            viewModel.onPermissionGranted()
+        }
+    }
+
     // Обработчик запроса разрешений на чтение памяти
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -96,6 +105,9 @@ class LocalTracksFragment : Fragment() {
             },
             onDeleteClick = { track ->
                 showDeleteConfirmDialog(track)
+            },
+            onLongClick = { track ->
+                showEditTrackDialog(track)
             }
         )
 
@@ -107,6 +119,65 @@ class LocalTracksFragment : Fragment() {
         )
     }
 
+    private fun showEditTrackDialog(track: Track) {
+        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_edit_track, null)
+        val etFileName = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_file_name)
+        val etName = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_track_name)
+        val etAlbum = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_album)
+        val etArtist = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_artist)
+        val etGenre = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_genre)
+
+        etFileName.setText(track.displayName ?: "")
+        etName.setText(track.name ?: "")
+        etAlbum.setText(track.albumName ?: "")
+        etArtist.setText(track.artistName ?: "")
+        etGenre.setText(track.genre ?: "")
+
+        val dialog = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.edit_track_title)
+            .setView(dialogView)
+            .setPositiveButton(R.string.yes) { _, _ ->
+                val newName = etName.text.toString().trim()
+                val newFileName = etFileName.text.toString().trim()
+                if (newName.isNotEmpty() && newFileName.isNotEmpty()) {
+                    viewModel.updateTrackMetadata(
+                        track = track,
+                        newName = newName,
+                        newAlbum = etAlbum.text.toString().trim(),
+                        newArtist = etArtist.text.toString().trim(),
+                        newGenre = etGenre.text.toString().trim(),
+                        newYear = track.year ?: "", // Оставляем старый год
+                        newFileName = newFileName
+                    )
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+
+        // Настраиваем окно для максимального поднятия вверх
+        dialog.window?.apply {
+            // Позволяем диалогу заходить в зону статус-бара если нужно
+            addFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN)
+            addFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
+            
+            setGravity(android.view.Gravity.TOP)
+            val params = attributes
+            // Используем небольшое отрицательное значение для компенсации отступов Material диалога
+            params.y = -20.toPx(requireContext())
+            attributes = params
+            
+            setLayout(
+                android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                android.view.WindowManager.LayoutParams.WRAP_CONTENT
+            )
+            setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
+    }
+
+    // Вспомогательная функция для перевода dp в px
+    private fun Int.toPx(context: android.content.Context): Int = 
+        (this * context.resources.displayMetrics.density).toInt()
+
     private fun updateUI() {
         val folders = viewModel.localFolders.value
         
@@ -116,7 +187,9 @@ class LocalTracksFragment : Fragment() {
         }
         
         if (currentFolderName == null) {
-            binding.rvLocalTracks.adapter = folderAdapter
+            if (binding.rvLocalTracks.adapter != folderAdapter) {
+                binding.rvLocalTracks.adapter = folderAdapter
+            }
             val folderList = folders.map { it.key to it.value.size }.sortedBy { it.first }
             folderAdapter.updateData(folderList)
             
@@ -124,7 +197,9 @@ class LocalTracksFragment : Fragment() {
             binding.btnBack.visibility = View.GONE
             binding.tvNoTracks.visibility = if (folderList.isEmpty()) View.VISIBLE else View.GONE
         } else {
-            binding.rvLocalTracks.adapter = trackAdapter
+            if (binding.rvLocalTracks.adapter != trackAdapter) {
+                binding.rvLocalTracks.adapter = trackAdapter
+            }
             val tracksInFolder = folders[currentFolderName] ?: emptyList()
             trackAdapter.updateData(tracksInFolder)
             
@@ -177,9 +252,35 @@ class LocalTracksFragment : Fragment() {
             updateUI()
         }
 
+        viewModel.metadataOverrides.observe(viewLifecycleOwner) { overrides ->
+            trackAdapter.updateOverrides(overrides)
+            // Уведомляем MainViewModel, чтобы плеер тоже узнал о правках
+            mainViewModel.updateMetadataOverrides()
+        }
+
+        viewModel.pendingIntent.observe(viewLifecycleOwner) { intent ->
+            intent?.let {
+                val request = androidx.activity.result.IntentSenderRequest.Builder(it).build()
+                intentSenderLauncher.launch(request)
+                viewModel.clearPendingIntent()
+            }
+        }
+
+        viewModel.renameEvent.observe(viewLifecycleOwner) { event ->
+            val (success, error) = event
+            if (success) {
+                android.widget.Toast.makeText(requireContext(), R.string.rename_success, android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                val message = error ?: getString(R.string.rename_error)
+                android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+
         viewModel.localTracks.observe(viewLifecycleOwner) { tracks ->
             // Обновляем сохраненное количество
             preferenceProvider.saveLastTrackCount(tracks.size)
+            // Если мы не используем папки (вдруг?), можно раскомментировать updateUI()
+            // Но пока всё завязано на localFolders
         }
 
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->

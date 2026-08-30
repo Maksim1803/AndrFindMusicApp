@@ -123,6 +123,22 @@ class PreferenceProvider(context: Context) {
         preference.edit().putInt(KEY_LAST_TRACK_COUNT, count).apply()
     }
 
+    // Метод для сохранения кастомных метаданных (переименований)
+    fun saveMetadataOverrides(overrides: Map<String, Track>) {
+        preference.edit().putString(KEY_METADATA_OVERRIDES, gson.toJson(overrides)).apply()
+    }
+
+    // Метод для получения кастомных метаданных
+    fun getMetadataOverrides(): Map<String, Track> {
+        val json = preference.getString(KEY_METADATA_OVERRIDES, null) ?: return emptyMap()
+        return try {
+            val type = object : TypeToken<Map<String, Track>>() {}.type
+            gson.fromJson(json, type)
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
     companion object {
         private const val KEY_LAST_CATEGORY = "last_category"
         private const val DEFAULT_CATEGORY = "pop"
@@ -134,5 +150,6 @@ class PreferenceProvider(context: Context) {
         private const val KEY_LANGUAGE = "app_language"
         private const val KEY_IS_FIRST_LAUNCH = "is_first_launch"
         private const val KEY_LAST_TRACK_COUNT = "last_track_count"
+        private const val KEY_METADATA_OVERRIDES = "metadata_overrides"
     }
 }

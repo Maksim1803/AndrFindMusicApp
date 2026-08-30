@@ -71,4 +71,14 @@
     <string name="new_tracks_scan_message">На вашем устройстве обнаружены новые музыкальные треки, добавить их в приложение?</string>
     <string name="yes">Да</string>
     <string name="no">Нет</string>
+    <string name="edit_track_title">Редактирование трека</string>
+    <string name="edit_file_name">Имя файла</string>
+    <string name="edit_track_name">Название песни</string>
+    <string name="edit_album">Альбом</string>
+    <string name="edit_artist">Исполнитель</string>
+    <string name="edit_genre">Жанр</string>
+    <string name="edit_year">Год</string>
+    <string name="rename_success">Трек переименован</string>
+    <string name="rename_error">Не удалось переименовать трек</string>
+    <string name="rename_permission_required">Требуется разрешение на изменение файла</string>
 </resources>

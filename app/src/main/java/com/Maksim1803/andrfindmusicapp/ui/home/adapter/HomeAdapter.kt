@@ -14,16 +14,24 @@ class HomeAdapter(
     private val onItemClick: (Track) -> Unit,
     private val onFavoriteClick: (Track) -> Unit,
     private val onReminderClick: (Track) -> Unit,
-    private val onDeleteClick: ((Track) -> Unit)? = null
+    private val onDeleteClick: ((Track) -> Unit)? = null,
+    private val onLongClick: ((Track) -> Unit)? = null
 ) : RecyclerView.Adapter<HomeAdapter.ViewHolder>() {
 
     private var tracks: List<Track> = emptyList()
     private var favoriteIds: Set<String> = emptySet()
     private var reminderIds: Set<String> = emptySet()
+    private var metadataOverrides: Map<String, Track> = emptyMap()
 
     // Метод для обновления списка треков
     fun updateData(newTracks: List<Track>) {
         tracks = newTracks
+        notifyDataSetChanged()
+    }
+
+    // Метод для обновления переименований
+    fun updateOverrides(overrides: Map<String, Track>) {
+        metadataOverrides = overrides
         notifyDataSetChanged()
     }
 
@@ -50,7 +58,10 @@ class HomeAdapter(
 
     // Метод для привязки данных трека к ViewHolder
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val track = tracks[position]
+        val originalTrack = tracks[position]
+        // Применяем оверрайды прямо при отрисовке (самый надежный способ)
+        val track = metadataOverrides[originalTrack.id] ?: originalTrack
+
         with(holder.binding) {
             title.text = track.name
             artist.text = track.artistName
@@ -68,19 +79,19 @@ class HomeAdapter(
             )
 
             // Метод для обработки клика по иконке избранного
-            favoriteIcon.setOnClickListener { onFavoriteClick(track) }
+            favoriteIcon.setOnClickListener { onFavoriteClick(originalTrack) }
             
             // Показываем иконку колокольчика, если установлено напоминание
             val hasReminder = reminderIds.contains(track.id)
             reminderIcon.visibility = if (hasReminder) View.VISIBLE else View.GONE
             
             // Метод для обработки клика по иконке напоминания
-            reminderIcon.setOnClickListener { onReminderClick(track) }
+            reminderIcon.setOnClickListener { onReminderClick(originalTrack) }
 
             // Если передан колбэк для удаления, показываем иконку корзины
             if (onDeleteClick != null) {
                 deleteIcon.visibility = View.VISIBLE
-                deleteIcon.setOnClickListener { onDeleteClick.invoke(track) }
+                deleteIcon.setOnClickListener { onDeleteClick.invoke(originalTrack) }
             } else {
                 deleteIcon.visibility = View.GONE
             }
@@ -89,8 +100,14 @@ class HomeAdapter(
             val isLocal = track.audioUrl?.startsWith("content://") == true || track.audioUrl?.startsWith("file://") == true
             localIndicatorIcon.visibility = if (isLocal) View.VISIBLE else View.GONE
 
+            // Метод для обработки длинного клика по всему элементу (для переименования)
+            root.setOnLongClickListener {
+                onLongClick?.invoke(originalTrack)
+                true
+            }
+
             // Метод для обработки клика по всему элементу списка
-            root.setOnClickListener { onItemClick(track) }
+            root.setOnClickListener { onItemClick(originalTrack) }
         }
     }
 
