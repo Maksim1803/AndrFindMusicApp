@@ -35,7 +35,7 @@ class PreferenceProvider(context: Context) {
         val json = preference.getString(KEY_LAST_TRACK, null) ?: return null
         return try {
             gson.fromJson(json, Track::class.java)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
@@ -46,7 +46,7 @@ class PreferenceProvider(context: Context) {
         return try {
             val type = object : TypeToken<List<Track>>() {}.type
             gson.fromJson(json, type)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }
@@ -62,7 +62,7 @@ class PreferenceProvider(context: Context) {
         return try {
             val type = object : TypeToken<Set<String>>() {}.type
             gson.fromJson(json, type)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptySet()
         }
     }
@@ -78,7 +78,7 @@ class PreferenceProvider(context: Context) {
         return try {
             val type = object : TypeToken<Map<String, Long>>() {}.type
             gson.fromJson(json, type)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyMap()
         }
     }
@@ -134,7 +134,7 @@ class PreferenceProvider(context: Context) {
         return try {
             val type = object : TypeToken<Map<String, Track>>() {}.type
             gson.fromJson(json, type)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyMap()
         }
     }

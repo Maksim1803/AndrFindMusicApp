@@ -18,7 +18,6 @@ import javax.inject.Inject
 @HiltViewModel
 class LocalTracksViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val downloadManager: com.Maksim1803.andrfindmusicapp.utils.TrackDownloadManager,
     private val preferenceProvider: com.Maksim1803.andrfindmusicapp.utils.PreferenceProvider
 ) : ViewModel() {
 

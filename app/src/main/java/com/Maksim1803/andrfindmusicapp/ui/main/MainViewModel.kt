@@ -398,7 +398,7 @@ class MainViewModel @Inject constructor(
                 null,
                 null
             )?.use { it.count } ?: 0
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             0
         }
     }
