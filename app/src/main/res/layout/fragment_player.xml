@@ -102,6 +102,25 @@
         app:layout_constraintTop_toBottomOf="@+id/details_title"
         tools:text="Artist Name" />
 
+    <!-- Текстовая информация: Жанр -->
+    <TextView
+        android:id="@+id/details_genre"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textSize="12sp"
+        android:textStyle="italic"
+        android:textColor="?attr/colorOnSurface"
+        android:alpha="0.7"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="@+id/cardView"
+        app:layout_constraintStart_toStartOf="@+id/cardView"
+        app:layout_constraintTop_toBottomOf="@+id/details_artist"
+        tools:text="Genre"
+        tools:visibility="visible" />
+
     <!-- Полоса прокрутки воспроизведения (SeekBar) -->
     <SeekBar
         android:id="@+id/seek_bar"
@@ -110,7 +129,7 @@
         android:layout_marginTop="4dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/details_artist" />
+        app:layout_constraintTop_toBottomOf="@+id/details_genre" />
 
     <!-- Текущее время воспроизведения -->
     <TextView

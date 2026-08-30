@@ -2,7 +2,6 @@ package com.Maksim1803.andrfindmusicapp.ui.local
 
 import android.content.ContentUris
 import android.content.Context
-import android.media.MediaMetadataRetriever
 import android.provider.MediaStore
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -19,7 +18,7 @@ import javax.inject.Inject
 @HiltViewModel
 class LocalTracksViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val downloadManager: com.Maksim1803.andrfindmusicapp.utils.TrackDownloadManager
+    private val preferenceProvider: com.Maksim1803.andrfindmusicapp.utils.PreferenceProvider
 ) : ViewModel() {
 
     private val _localTracks = MutableLiveData<List<Track>>()
@@ -31,19 +30,138 @@ class LocalTracksViewModel @Inject constructor(
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> = _isLoading
 
+    private val _metadataOverrides = MutableLiveData<Map<String, Track>>(emptyMap())
+    val metadataOverrides: LiveData<Map<String, Track>> = _metadataOverrides
+
+    private val _renameEvent = MutableLiveData<Pair<Boolean, String?>>()
+    val renameEvent: LiveData<Pair<Boolean, String?>> = _renameEvent
+
+    private val _pendingIntent = MutableLiveData<android.app.PendingIntent?>()
+    val pendingIntent: LiveData<android.app.PendingIntent?> = _pendingIntent
+
+    // Кэш для хранения правок, чтобы MediaStore не затирал их старыми данными
+    private val metadataOverridesCache = mutableMapOf<String, Track>()
+
+    private var pendingAction: (() -> Unit)? = null
+
+    init {
+        // Загружаем сохраненные правки из SharedPreferences
+        val saved = preferenceProvider.getMetadataOverrides()
+        metadataOverridesCache.putAll(saved)
+        _metadataOverrides.value = saved
+    }
+
     fun loadLocalTracks() {
         viewModelScope.launch {
             _isLoading.value = true
             val tracks = fetchMusicFiles()
-            _localTracks.value = tracks
-            _localFolders.value = tracks.groupBy { it.folderName ?: "Music" }
+            
+            // Применяем сессионные правки поверх данных из MediaStore
+            val finalTracks = tracks.map { track ->
+                metadataOverridesCache[track.id] ?: track
+            }
+            
+            _localTracks.value = finalTracks
+            _localFolders.value = finalTracks.groupBy { it.folderName ?: "Music" }
             _isLoading.value = false
         }
     }
 
+    fun updateTrackMetadata(
+        track: Track,
+        newName: String,
+        newAlbum: String,
+        newArtist: String,
+        newGenre: String,
+        newYear: String,
+        newFileName: String
+    ) {
+        viewModelScope.launch {
+            try {
+                val trackIdLong = track.id.removePrefix("local_").toLongOrNull() ?: return@launch
+                val contentUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, trackIdLong)
+
+                val extension = track.displayName?.substringAfterLast(".", "mp3") ?: "mp3"
+                val finalFileName = if (newFileName.contains(".")) newFileName else "$newFileName.$extension"
+
+                val values = android.content.ContentValues().apply {
+                    put(MediaStore.Audio.Media.TITLE, newName)
+                    put(MediaStore.Audio.Media.ALBUM, newAlbum)
+                    put(MediaStore.Audio.Media.ARTIST, newArtist)
+                    newYear.toIntOrNull()?.let { put(MediaStore.Audio.Media.YEAR, it) }
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                        put(MediaStore.Audio.Media.GENRE, newGenre)
+                    }
+                    put(MediaStore.Audio.Media.DISPLAY_NAME, finalFileName)
+                }
+
+                val updatedRows = withContext(Dispatchers.IO) {
+                    context.contentResolver.update(contentUri, values, null, null)
+                }
+                
+                if (updatedRows > 0) {
+                    // Сохраняем правку в кэш и ПЕРСИСТИРУЕМ её
+                    val updatedTrack = track.copy(
+                        name = newName,
+                        albumName = newAlbum,
+                        artistName = newArtist,
+                        genre = newGenre,
+                        year = newYear,
+                        displayName = finalFileName
+                    )
+                    metadataOverridesCache[track.id] = updatedTrack
+                    preferenceProvider.saveMetadataOverrides(metadataOverridesCache)
+                    _metadataOverrides.value = metadataOverridesCache
+
+                    // Обновляем текущее состояние мгновенно
+                    val currentTracks = _localTracks.value?.toMutableList() ?: mutableListOf()
+                    val index = currentTracks.indexOfFirst { it.id == track.id }
+                    if (index != -1) {
+                        currentTracks[index] = updatedTrack
+                        _localTracks.value = currentTracks
+                        _localFolders.value = currentTracks.groupBy { it.folderName ?: "Music" }
+                    }
+
+                    // Уведомляем систему
+                    val filePath = withContext(Dispatchers.IO) {
+                        context.contentResolver.query(contentUri, arrayOf(MediaStore.Audio.Media.DATA), null, null, null)?.use { 
+                            if (it.moveToFirst()) it.getString(0) else null 
+                        }
+                    }
+                    filePath?.let { path ->
+                        android.media.MediaScannerConnection.scanFile(context, arrayOf(path), null, null)
+                    }
+
+                    _renameEvent.value = true to null
+                } else {
+                    _renameEvent.value = false to "No rows updated"
+                }
+            } catch (e: SecurityException) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q && 
+                    e is android.app.RecoverableSecurityException) {
+                    pendingAction = { updateTrackMetadata(track, newName, newAlbum, newArtist, newGenre, newYear, newFileName) }
+                    _pendingIntent.value = e.userAction.actionIntent
+                } else {
+                    _renameEvent.value = false to e.message
+                }
+            } catch (e: Exception) {
+                _renameEvent.value = false to e.message
+            }
+        }
+    }
+
+    fun onPermissionGranted() {
+        pendingAction?.invoke()
+        pendingAction = null
+    }
+
+    fun clearPendingIntent() {
+        _pendingIntent.value = null
+    }
+
     private suspend fun fetchMusicFiles(): List<Track> = withContext(Dispatchers.IO) {
         val tracksList = mutableListOf<Track>()
-        val projection = arrayOf(
+        val projection = mutableListOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
@@ -51,112 +169,60 @@ class LocalTracksViewModel @Inject constructor(
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DISPLAY_NAME,
+            MediaStore.Audio.Media.YEAR,
+            MediaStore.Audio.Media.DATA
+        ).apply {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                MediaStore.Audio.Media.BUCKET_DISPLAY_NAME
-            } else {
-                MediaStore.Audio.Media.DATA
+                add(MediaStore.Audio.Media.BUCKET_DISPLAY_NAME)
             }
-        )
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                add(MediaStore.Audio.Media.GENRE)
+            }
+        }.toTypedArray()
 
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-        
         context.contentResolver.query(
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
             projection,
-            selection,
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0",
             null,
             "${MediaStore.Audio.Media.DATE_ADDED} DESC"
         )?.use { cursor ->
-            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-            val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-            val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-            val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
-            val displayNameColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+            val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+            val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+            val durCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+            val albIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+            val dispCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val yearCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
+            val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
             
-            val folderColumn = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            val genreCol = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                cursor.getColumnIndex(MediaStore.Audio.Media.GENRE)
+            } else -1
+
+            val folderCol = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                 cursor.getColumnIndex(MediaStore.Audio.Media.BUCKET_DISPLAY_NAME)
-            } else {
-                cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
-            }
+            } else -1
 
             while (cursor.moveToNext()) {
-                val id = cursor.getLong(idColumn)
-                var title = cursor.getString(titleColumn) ?: ""
-                var artist = cursor.getString(artistColumn) ?: "Unknown Artist"
-                var album = cursor.getString(albumColumn) ?: "Unknown Album"
-                val duration = cursor.getInt(durationColumn) / 1000
-                val albumId = cursor.getLong(albumIdColumn)
-                val displayName = cursor.getString(displayNameColumn) ?: ""
+                val id = cursor.getLong(idCol)
+                val title = cursor.getString(titleCol) ?: ""
+                val artist = cursor.getString(artistCol) ?: "Unknown"
+                val album = cursor.getString(albumCol) ?: "Unknown"
+                val duration = cursor.getInt(durCol) / 1000
+                val albumId = cursor.getLong(albIdCol)
+                val displayName = cursor.getString(dispCol) ?: ""
+                val year = cursor.getInt(yearCol)
+                val dataPath = cursor.getString(dataCol)
+                val genre = if (genreCol != -1) cursor.getString(genreCol) ?: "" else ""
                 
-                var folderName = if (folderColumn != -1) {
-                    val rawFolder = cursor.getString(folderColumn)
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                        rawFolder ?: "Music"
-                    } else {
-                        rawFolder?.let { java.io.File(it).parentFile?.name } ?: "Music"
-                    }
-                } else "Music"
-
-                // Принудительно помечаем папку Jamendo_Tracks, если файл там
-                if (displayName.contains("Jamendo_Tracks") || folderName == "Jamendo_Tracks") {
-                    folderName = "Jamendo_Tracks"
-                } else if (folderName == "Music" || folderName == "music") {
-                    // Если трек в корне Music, проверяем, не наш ли он (по формату имени или ID)
-                    // В данном случае просто вызываем проверку через DownloadManager
-                    val contentUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
-                    val mockTrack = Track(id.toString(), title, null, artist, album, contentUri.toString(), null)
-                    if (downloadManager.getDownloadedUri(mockTrack) != null) {
-                        folderName = "Jamendo_Tracks"
-                    }
+                val folderName = if (folderCol != -1) {
+                    cursor.getString(folderCol) ?: "Music"
+                } else {
+                    java.io.File(dataPath).parentFile?.name ?: "Music"
                 }
 
-                val contentUri = ContentUris.withAppendedId(
-                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                    id
-                )
-
-                // Функция для проверки, является ли строка "кракозябрами" (китайскими иероглифами при ошибке кодировки)
-                fun isGibberish(s: String): Boolean {
-                    if (s.isEmpty() || s == "<unknown>") return true
-                    // Если в строке есть иероглифы (диапазон CJK), но мы не в Китае - это почти наверняка ошибка кодировки
-                    return s.any { it.code in 0x4E00..0x9FFF }
-                }
-
-                // Если данные от MediaStore похожи на мусор или иероглифы, пробуем альтернативы
-                if (title.isEmpty() || title == "<unknown>" || isGibberish(title) || !title.any { it.isLetter() }) {
-                    if (displayName.isNotEmpty() && !displayName.startsWith("track_")) {
-                        title = displayName.substringBeforeLast(".")
-                    } else {
-                        // Крайний случай: пробуем MediaMetadataRetriever
-                        try {
-                            val retriever = MediaMetadataRetriever()
-                            retriever.setDataSource(context, contentUri)
-                            val metaTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-                            if (!metaTitle.isNullOrBlank() && !isGibberish(metaTitle)) {
-                                title = metaTitle
-                            }
-                            retriever.release()
-                        } catch (_: Exception) {}
-                    }
-                }
-                
-                // Если артист тоже в иероглифах, пробуем вытащить его из имени файла (если оно формата "Artist - Title")
-                if (isGibberish(artist) || artist == "<unknown>") {
-                    if (displayName.contains(" - ")) {
-                        artist = displayName.substringBefore(" - ").trim()
-                        if (title == displayName.substringBeforeLast(".")) {
-                            title = displayName.substringAfter(" - ").substringBeforeLast(".").trim()
-                        }
-                    }
-                }
-                
-                title = fixEncoding(title)
-                artist = fixEncoding(artist)
-                album = fixEncoding(album)
-                
-                // Формируем URI обложки альбома
                 val albumArtUri = ContentUris.withAppendedId(
                     android.net.Uri.parse("content://media/external/audio/albumart"),
                     albumId
@@ -165,28 +231,20 @@ class LocalTracksViewModel @Inject constructor(
                 tracksList.add(
                     Track(
                         id = "local_$id",
-                        name = title,
+                        name = if (title.isBlank() || title == "<unknown>") displayName.substringBeforeLast(".") else title,
                         artistName = artist,
                         albumName = album,
                         duration = duration,
-                        audioUrl = contentUri.toString(),
+                        audioUrl = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id).toString(),
                         imageUrl = albumArtUri,
-                        folderName = folderName
+                        folderName = if (dataPath.contains("Jamendo_Tracks")) "Jamendo_Tracks" else folderName,
+                        genre = genre,
+                        year = if (year > 0) year.toString() else "",
+                        displayName = displayName
                     )
                 )
             }
         }
         tracksList
-    }
-
-    private fun fixEncoding(s: String): String {
-        if (s.isEmpty() || s == "<unknown>") return s
-        return try {
-            if (s.any { it.code in 128..255 }) {
-                val bytes = s.toByteArray(java.nio.charset.StandardCharsets.ISO_8859_1)
-                val decoded = String(bytes, java.nio.charset.Charset.forName("Windows-1251"))
-                if (decoded.any { it in 'а'..'я' || it in 'А'..'Я' }) decoded else s
-            } else s
-        } catch (_: Exception) { s }
     }
 }

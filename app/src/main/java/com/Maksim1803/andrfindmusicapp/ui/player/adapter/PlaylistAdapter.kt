@@ -17,9 +17,15 @@ class PlaylistAdapter(
 
     private var tracks: List<Track> = emptyList()
     private var currentTrackId: String? = null
+    private var metadataOverrides: Map<String, Track> = emptyMap()
 
     fun updateData(newTracks: List<Track>) {
         tracks = newTracks
+        notifyDataSetChanged()
+    }
+
+    fun updateOverrides(overrides: Map<String, Track>) {
+        metadataOverrides = overrides
         notifyDataSetChanged()
     }
 
@@ -36,7 +42,9 @@ class PlaylistAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val track = tracks[position]
+        val originalTrack = tracks[position]
+        val track = metadataOverrides[originalTrack.id] ?: originalTrack
+
         with(holder.binding) {
             smallTitle.text = track.name
             smallArtist.text = track.artistName
@@ -52,8 +60,8 @@ class PlaylistAdapter(
             icPlaying.visibility = if (isPlaying) View.VISIBLE else View.GONE
             smallItemContainer.alpha = if (isPlaying) 1.0f else 0.8f
             
-            smallDeleteIcon.setOnClickListener { onDeleteClick(track) }
-            root.setOnClickListener { onItemClick(track) }
+            smallDeleteIcon.setOnClickListener { onDeleteClick(originalTrack) }
+            root.setOnClickListener { onItemClick(originalTrack) }
         }
     }
 

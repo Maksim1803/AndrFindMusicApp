@@ -54,6 +54,9 @@ class MainViewModel @Inject constructor(
     private val _reminderTimes = MutableStateFlow<Map<String, Long>>(emptyMap())
     val reminderTimes = _reminderTimes.asStateFlow()
 
+    private val _metadataOverrides = MutableStateFlow<Map<String, Track>>(emptyMap())
+    val metadataOverrides = _metadataOverrides.asStateFlow()
+
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering = _isBuffering.asStateFlow()
 
@@ -121,6 +124,7 @@ class MainViewModel @Inject constructor(
 
         _reminderIds.value = savedReminders
         _reminderTimes.value = savedTimes
+        _metadataOverrides.value = preferenceProvider.getMetadataOverrides()
 
         viewModelScope.launch {
             val sessionToken = SessionToken(context, ComponentName(context, PlaybackService::class.java))
@@ -245,14 +249,24 @@ class MainViewModel @Inject constructor(
                 downloadManager.getDownloadedUri(it) != null 
             })
 
-            val tracksToPlay = if (sortedPlaylist.isEmpty()) listOf(track) else sortedPlaylist
+            val initialTracks = if (sortedPlaylist.isEmpty()) listOf(track) else sortedPlaylist
+            
+            // Преобразуем треки: если трек скачан, используем локальный URI
+            val tracksToPlay = initialTracks.map { t ->
+                val localUri = downloadManager.getDownloadedUri(t)
+                if (localUri != null) t.copy(audioUrl = localUri.toString()) else t
+            }
             
             withContext(kotlinx.coroutines.Dispatchers.Main) {
                 _playlist.value = tracksToPlay
                 controller?.setMediaItems(tracksToPlay.map { createMediaItem(it) })
 
+                // Ищем индекс по ID, так как audioUrl мог измениться
                 val index = tracksToPlay.indexOfFirst { it.id == track.id }
-                if (index != -1) controller?.seekTo(index, 0)
+                if (index != -1) {
+                    controller?.seekTo(index, 0)
+                    _currentTrack.value = tracksToPlay[index]
+                }
 
                 controller?.prepare()
                 controller?.play()
@@ -366,6 +380,11 @@ class MainViewModel @Inject constructor(
         preferenceProvider.saveReminderTimes(currentTimes)
     }
 
+    // Метод для обновления кастомных метаданных извне (если нужно)
+    fun updateMetadataOverrides() {
+        _metadataOverrides.value = preferenceProvider.getMetadataOverrides()
+    }
+
     // Метод для получения количества локальных треков на устройстве
     fun getLocalTracksCount(): Int {
         val projection = arrayOf(android.provider.MediaStore.Audio.Media._ID)
@@ -379,7 +398,7 @@ class MainViewModel @Inject constructor(
                 null,
                 null
             )?.use { it.count } ?: 0
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             0
         }
     }

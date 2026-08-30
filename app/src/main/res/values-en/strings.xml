@@ -71,4 +71,14 @@
     <string name="new_tracks_scan_message">New music tracks were found on your device. Would you like to add them to the app?</string>
     <string name="yes">Yes</string>
     <string name="no">No</string>
+    <string name="edit_track_title">Edit Track</string>
+    <string name="edit_file_name">File Name</string>
+    <string name="edit_track_name">Track Name</string>
+    <string name="edit_album">Album</string>
+    <string name="edit_artist">Artist</string>
+    <string name="edit_genre">Genre</string>
+    <string name="edit_year">Year</string>
+    <string name="rename_success">Track renamed</string>
+    <string name="rename_error">Failed to rename track</string>
+    <string name="rename_permission_required">Permission required to modify file</string>
 </resources>

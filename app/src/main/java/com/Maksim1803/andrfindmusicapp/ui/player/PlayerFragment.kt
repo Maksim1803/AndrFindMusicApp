@@ -238,12 +238,33 @@ class PlayerFragment : Fragment() {
                 binding.playerProgressBar.visibility = if (isBuffering) View.VISIBLE else View.GONE
             }
         }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainViewModel.metadataOverrides.collectLatest { overrides ->
+                playlistAdapter.updateOverrides(overrides)
+                // Если текущий трек переименован, UI обновится через observeViewModel -> setupUI
+                mainViewModel.currentTrack.value?.let { setupUI(it) }
+            }
+        }
     }
 
     // Метод для обновления UI данными трека
-    private fun setupUI(track: Track) {
+    private fun setupUI(originalTrack: Track) {
+        // Применяем оверрайды и здесь для надежности
+        val overrides = mainViewModel.metadataOverrides.value
+        val track = overrides[originalTrack.id] ?: originalTrack
+
         binding.detailsTitle.text = track.name
         binding.detailsArtist.text = track.artistName
+        
+        // Отображаем жанр, если он есть
+        if (!track.genre.isNullOrBlank()) {
+            binding.detailsGenre.text = track.genre
+            binding.detailsGenre.visibility = View.VISIBLE
+        } else {
+            binding.detailsGenre.visibility = View.GONE
+        }
+
         binding.detailsPoster.load(track.imageUrl) {
             crossfade(true)
             placeholder(R.drawable.ic_launcher_background)
@@ -257,12 +278,39 @@ class PlayerFragment : Fragment() {
         binding.seekBar.max = (track.duration ?: 0) * 1000 // Jamendo дает в секундах
     }
 
-    // Метод для того, чтобы поделиться информацией о треке
+    // Метод для того, чтобы поделиться информацией о треке или самим файлом
     private fun shareTrack(track: Track) {
+        val audioUrl = track.audioUrl ?: return
+        val isLocal = audioUrl.startsWith("content://") || audioUrl.startsWith("file://")
+
         val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            val text = getString(R.string.share_text, track.name, track.artistName)
-            putExtra(android.content.Intent.EXTRA_TEXT, text)
+            if (isLocal) {
+                // Если трек локальный, делимся файлом
+                val uri = if (audioUrl.startsWith("content://")) {
+                    android.net.Uri.parse(audioUrl)
+                } else {
+                    // Если это file://, преобразуем в content:// через FileProvider
+                    val file = java.io.File(android.net.Uri.parse(audioUrl).path ?: "")
+                    androidx.core.content.FileProvider.getUriForFile(
+                        requireContext(),
+                        "${requireContext().packageName}.fileprovider",
+                        file
+                    )
+                }
+                
+                type = "audio/*"
+                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                
+                // Добавляем текст как описание к файлу
+                val text = getString(R.string.share_text, track.name, track.artistName)
+                putExtra(android.content.Intent.EXTRA_TEXT, text)
+            } else {
+                // Если трек онлайн, делимся только текстом и ссылкой
+                type = "text/plain"
+                val text = "${getString(R.string.share_text, track.name, track.artistName)}\n${track.audioUrl}"
+                putExtra(android.content.Intent.EXTRA_TEXT, text)
+            }
         }
         startActivity(android.content.Intent.createChooser(shareIntent, getString(R.string.share_content_description)))
     }
